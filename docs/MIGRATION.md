@@ -72,32 +72,25 @@ tar -xvzf ../char-archive-backup.tar.gz
 
 ### Step 3: Update Configuration
 
-Edit `docker-compose.yml` on the new server:
+Copy and edit `.env` on the new server:
 
 ```bash
-nano docker-compose.yml
+cp .env.example .env
+nano .env
 ```
 
-**Update the IP addresses** from `100.108.69.91` to your new server's IP:
+Set `BIND_HOST` to your server or Tailscale IP (or `0.0.0.0` / `127.0.0.1` as needed). Ports are controlled with `POSTGRES_PORT`, `PGADMIN_PORT`, and `FRONTEND_PORT`:
 
-```yaml
-ports:
-  - "YOUR_NEW_IP:5432:5432"   # PostgreSQL
-  - "YOUR_NEW_IP:5050:80"     # pgAdmin
-  - "YOUR_NEW_IP:8080:5000"   # Frontend
+```env
+BIND_HOST=YOUR_NEW_IP
+POSTGRES_PORT=5432
+PGADMIN_PORT=5050
+FRONTEND_PORT=8080
 ```
 
-Or use `0.0.0.0` to listen on all interfaces:
-```yaml
-ports:
-  - "5432:5432"
-  - "5050:80"
-  - "8080:5000"
-```
+Or set `BIND_HOST=0.0.0.0` to listen on all interfaces.
 
-**Optionally update passwords** in:
-- `docker-compose.yml` (environment variables)
-- `database_logins.md` (documentation)
+**Update passwords** in `.env` and `database_logins.md` (documentation).
 
 ### Step 4: Create Data Directories
 
@@ -107,20 +100,14 @@ mkdir -p db_data/postgres db_data/pgadmin
 
 ### Step 5: Import the Database
 
-**Option A: Using the import compose file**
+**Option A: Using the import compose overlay**
 
-If you have `docs/docker-compose.yml.backup`:
 ```bash
-cp docs/docker-compose.yml.backup docker-compose.yml.import
+cp .env.example .env
+nano .env   # set BIND_HOST, passwords
 
-# Edit to update IP addresses
-nano docker-compose.yml.import
-
-# Start with import configuration
-docker compose -f docker-compose.yml.import up -d
-
-# Watch import progress
-docker compose -f docker-compose.yml.import logs -f postgres
+docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.import.yml logs -f postgres
 ```
 
 **Option B: Manual import**

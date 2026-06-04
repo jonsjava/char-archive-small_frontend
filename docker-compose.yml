@@ -1,18 +1,37 @@
+# Production stack. Copy .env.example to .env and set BIND_HOST (e.g. Tailscale IP) and passwords.
+# First-time DB import: docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-char_archive}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  POSTGRES_DB: ${POSTGRES_DB:-char_archive}
+
+x-frontend-env: &frontend-env
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_NAME: ${POSTGRES_DB:-char_archive}
+  DB_USER: ${POSTGRES_USER:-char_archive}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  ARCHIVE_PATH: /archive
+  IMAGE_LAYOUT: ${IMAGE_LAYOUT:-sharded}
+  IMAGE_SUBDIR: ${IMAGE_SUBDIR:-hashed-data}
+  ENABLE_BROWSE_ALL: ${ENABLE_BROWSE_ALL:-false}
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: char_archive_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: char_archive
-      POSTGRES_PASSWORD: CharArch1ve_Db_2026!
-      POSTGRES_DB: char_archive
+      <<: *postgres-env
     volumes:
       - ./db_data/postgres:/var/lib/postgresql/data
     ports:
-      - "100.108.69.91:5432:5432"
+      - target: 5432
+        published: ${POSTGRES_PORT:-5432}
+        host_ip: ${BIND_HOST:-0.0.0.0}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U char_archive -d char_archive"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-char_archive} -d ${POSTGRES_DB:-char_archive}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,13 +43,15 @@ services:
     container_name: char_archive_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@chararchive.dev
-      PGADMIN_DEFAULT_PASSWORD: PgAdm1n_2026!Secure
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@chararchive.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
       PGADMIN_CONFIG_SERVER_MODE: "True"
     volumes:
       - ./db_data/pgadmin:/var/lib/pgadmin
     ports:
-      - "100.108.69.91:5050:80"
+      - target: 80
+        published: ${PGADMIN_PORT:-5050}
+        host_ip: ${BIND_HOST:-0.0.0.0}
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,19 +65,22 @@ services:
     container_name: char_archive_frontend
     restart: unless-stopped
     environment:
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: char_archive
-      DB_USER: char_archive
-      DB_PASSWORD: CharArch1ve_Db_2026!
-      ARCHIVE_PATH: /archive
+      <<: *frontend-env
     volumes:
       - ./archive:/archive:ro
     ports:
-      - "100.108.69.91:8080:5000"
+      - target: 5000
+        published: ${FRONTEND_PORT:-8080}
+        host_ip: ${BIND_HOST:-0.0.0.0}
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/stats')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     networks:
       - char_archive_network
 

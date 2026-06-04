@@ -94,6 +94,7 @@
         .line-clamp-2 {
             display: -webkit-box;
             -webkit-line-clamp: 2;
+            line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -217,6 +218,31 @@
             0%, 100% { opacity: 0.7; }
             50% { opacity: 1; }
         }
+        /* Clickable filter chips on cards and modal */
+        .filter-author,
+        .filter-tag {
+            cursor: pointer;
+        }
+        .filter-author:hover,
+        .filter-tag:hover {
+            color: #c4b5fd;
+        }
+        .tag-expand {
+            cursor: pointer;
+        }
+        .tag-expand:hover {
+            color: #c4b5fd;
+        }
+
+        /* Tag picker autocomplete */
+        .tag-picker:focus-within {
+            border-color: rgba(139, 92, 246, 0.7);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 20px rgba(139, 92, 246, 0.1);
+        }
+        .tag-suggestion.active {
+            background: #1e1e24;
+            color: #c4b5fd;
+        }
     </style>
 </head>
 <body class="h-full text-gray-100">
@@ -225,11 +251,13 @@
         <header class="bg-dark-card/80 backdrop-blur-md border-b border-dark-border/50 sticky top-0 z-50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">
-                        <span class="gradient-text">Character</span>
-                        <span class="text-white"> Archive</span>
-                    </h1>
-                    <div id="stats" class="text-sm text-purple-300/70 font-medium pulse-subtle"></div>
+                    <a href="/" class="block no-underline hover:opacity-90 transition-opacity w-fit" title="Home">
+                        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">
+                            <span class="gradient-text">Character</span>
+                            <span class="text-white"> Archive</span>
+                        </h1>
+                    </a>
+                    <div id="stats" class="text-sm text-purple-300/70 font-medium pulse-subtle{% if browse_all_enabled %} cursor-pointer hover:text-purple-300 transition-colors{% endif %}"{% if browse_all_enabled %} title="Browse all characters"{% endif %}></div>
                 </div>
             </div>
         </header>
@@ -239,42 +267,62 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
                 <!-- Search heading -->
                 <div class="text-center mb-6">
-                    <h2 class="text-lg sm:text-xl text-gray-300 font-medium">Find your perfect character</h2>
+                    <h2 class="text-lg sm:text-xl text-gray-300 font-medium">Search by name, author, or tags</h2>
                 </div>
 
-                <div class="flex flex-col sm:flex-row gap-3 max-w-4xl mx-auto">
-                    <div class="flex-1">
-                        <div class="relative group">
-                            <input
-                                type="text"
-                                id="searchInput"
-                                placeholder="Search characters by name or author..."
-                                class="w-full bg-dark-bg/80 border-2 border-dark-border rounded-xl px-5 py-4 pl-12 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/70 transition-all duration-300 search-glow"
-                            >
-                            <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500 group-focus-within:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                        </div>
+                <div class="flex flex-col gap-3 max-w-4xl mx-auto">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input
+                            type="text"
+                            id="nameFilter"
+                            placeholder="Name..."
+                            class="w-full bg-dark-bg/80 border-2 border-dark-border rounded-xl px-5 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/70 transition-all duration-300 search-glow"
+                        >
+                        <input
+                            type="text"
+                            id="authorFilter"
+                            placeholder="Author / uploader..."
+                            class="w-full bg-dark-bg/80 border-2 border-dark-border rounded-xl px-5 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500/70 transition-all duration-300 search-glow"
+                        >
                     </div>
-                    <div class="flex gap-3">
-                        <select id="sourceFilter" class="bg-dark-bg/80 border-2 border-dark-border rounded-xl px-4 py-4 text-white focus:outline-none focus:border-purple-500/70 transition-all duration-300 cursor-pointer hover:border-dark-hover">
+                    <div id="tagPicker" class="tag-picker relative bg-dark-bg/80 border-2 border-dark-border rounded-xl px-3 py-2 transition-all duration-300">
+                        <div id="tagChips" class="flex flex-wrap gap-1.5 mb-1 empty:mb-0"></div>
+                        <input
+                            type="text"
+                            id="tagInput"
+                            autocomplete="off"
+                            placeholder="Tags: type name, or -name to exclude (e.g. -female)..."
+                            class="w-full bg-transparent px-2 py-1.5 text-white placeholder-gray-500 focus:outline-none"
+                        >
+                        <div id="tagSuggestions" class="hidden absolute left-0 right-0 top-full mt-1 z-40 max-h-56 overflow-y-auto bg-dark-card border border-dark-border rounded-xl shadow-card"></div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <select id="sourceFilter" class="flex-1 bg-dark-bg/80 border-2 border-dark-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/70 transition-all duration-300 cursor-pointer hover:border-dark-hover">
                             <option value="all">All Sources</option>
-                            <option value="chub">Chub</option>
-                            <option value="generic">Generic</option>
-                            <option value="booru">Booru</option>
-                            <option value="webring">Webring</option>
-                            <option value="char_tavern">Character Tavern</option>
-                            <option value="risuai">RisuAI</option>
-                            <option value="nyaime">Nyaime</option>
+                            {% for src in sources %}
+                            <option value="{{ src.id }}">{{ src.label }}</option>
+                            {% endfor %}
+                        </select>
+                        <select id="sortFilter" class="flex-1 bg-dark-bg/80 border-2 border-dark-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500/70 transition-all duration-300 cursor-pointer hover:border-dark-hover">
+                            <option value="added:desc">Newest first</option>
+                            <option value="added:asc">Oldest first</option>
+                            <option value="name:asc">Name A–Z</option>
+                            <option value="name:desc">Name Z–A</option>
                         </select>
                         <button
                             id="searchBtn"
-                            class="btn-primary text-white px-8 py-4 rounded-xl font-semibold flex items-center gap-2 whitespace-nowrap"
+                            class="btn-primary text-white px-8 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 whitespace-nowrap"
                         >
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                             </svg>
                             Search
+                        </button>
+                        <button
+                            id="clearBtn"
+                            class="bg-dark-bg/80 hover:bg-dark-hover border-2 border-dark-border text-gray-300 px-6 py-3 rounded-xl font-semibold transition-all duration-300 hover:border-purple-500/30 whitespace-nowrap"
+                        >
+                            Clear
                         </button>
                     </div>
                 </div>
@@ -334,13 +382,14 @@
                 </div>
                 <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">Welcome to the <span class="gradient-text">Character Archive</span></h2>
                 <p class="text-gray-400 max-w-lg mx-auto text-lg leading-relaxed">
-                    Search through hundreds of thousands of AI character cards preserved from various platforms.
+                    Filter by name, author, or tags across hundreds of thousands of AI character cards preserved from various platforms.
                 </p>
-                <div class="mt-8 flex flex-wrap justify-center gap-3">
-                    <span class="px-4 py-2 rounded-full bg-dark-card border border-dark-border text-sm text-gray-400">Chub</span>
-                    <span class="px-4 py-2 rounded-full bg-dark-card border border-dark-border text-sm text-gray-400">Character Tavern</span>
-                    <span class="px-4 py-2 rounded-full bg-dark-card border border-dark-border text-sm text-gray-400">RisuAI</span>
-                    <span class="px-4 py-2 rounded-full bg-dark-card border border-dark-border text-sm text-gray-400">and more</span>
+                <div class="mt-8 flex flex-wrap justify-center gap-3" id="sourceBrowse">
+                    {% for src in sources %}
+                    <a href="/?source={{ src.id }}"
+                       class="source-browse px-4 py-2 rounded-full bg-dark-card border border-dark-border text-sm text-gray-400 hover:text-purple-300 hover:border-purple-500/40 transition-colors no-underline"
+                       data-source="{{ src.id }}">{{ src.label }}</a>
+                    {% endfor %}
                 </div>
             </div>
 
@@ -384,16 +433,27 @@
     </div>
 
     <script>
+        const OPEN_CHARACTER = {{ open_character | tojson }};
+        const BROWSE_ALL_ENABLED = {{ browse_all_enabled | tojson }};
+        const SOURCES = {{ sources | tojson }};
+        const SOURCE_IDS = new Set(SOURCES.map(s => s.id));
+
         // State
         let currentPage = 1;
-        let currentQuery = '';
-        let currentSource = 'all';
         let totalPages = 1;
+        let browseAllMode = false;
 
         // Elements
-        const searchInput = document.getElementById('searchInput');
+        const nameFilter = document.getElementById('nameFilter');
+        const authorFilter = document.getElementById('authorFilter');
+        const tagInput = document.getElementById('tagInput');
+        const tagChips = document.getElementById('tagChips');
+        const tagSuggestions = document.getElementById('tagSuggestions');
+        const tagPicker = document.getElementById('tagPicker');
         const searchBtn = document.getElementById('searchBtn');
+        const clearBtn = document.getElementById('clearBtn');
         const sourceFilter = document.getElementById('sourceFilter');
+        const sortFilter = document.getElementById('sortFilter');
         const results = document.getElementById('results');
         const loading = document.getElementById('loading');
         const noResults = document.getElementById('noResults');
@@ -415,7 +475,7 @@
             try {
                 const response = await fetch('/api/stats');
                 const data = await response.json();
-                stats.textContent = `${data.total.toLocaleString()} characters archived`;
+                stats.textContent = `${data.total.toLocaleString()} Characters Archived`;
             } catch (e) {
                 console.error('Failed to load stats:', e);
             }
@@ -436,63 +496,400 @@
             }
         }
 
-        // Search function
-        async function search(page = 1) {
-            const query = searchInput.value.trim();
-            if (!query) return;
+        // Tag picker state
+        let selectedTags = [];
+        let tagSuggestTimeout = null;
+        let tagSuggestIndex = -1;
 
-            currentQuery = query;
-            currentSource = sourceFilter.value;
+        function tagBaseName(tag) {
+            return (tag || '').replace(/^-/, '').trim().toLowerCase();
+        }
+
+        function isExcludeTag(tag) {
+            return (tag || '').trim().startsWith('-') && tag.trim().length > 1;
+        }
+
+        function renderTagChips() {
+            tagChips.innerHTML = selectedTags.map(tag => {
+                const exclude = isExcludeTag(tag);
+                const label = exclude ? tag.trim().slice(1) : tag.trim();
+                const chipClass = exclude
+                    ? 'bg-red-500/15 text-red-300 border-red-500/30'
+                    : 'bg-purple-500/15 text-purple-300 border-purple-500/30';
+                const removeClass = exclude ? 'text-red-300/70 hover:text-white' : 'text-purple-300/70 hover:text-white';
+                return `
+                <span class="inline-flex items-center gap-1 ${chipClass} text-xs px-2.5 py-1 rounded-full border">
+                    ${exclude ? '<span aria-hidden="true">−</span>' : ''}${escapeHtml(label)}
+                    <button type="button" class="tag-chip-remove ${removeClass} leading-none" data-tag="${escapeAttr(tag)}" aria-label="Remove ${escapeAttr(label)}">&times;</button>
+                </span>`;
+            }).join('');
+        }
+
+        function addSelectedTag(tag, autoSearch = false) {
+            let value = (tag || '').trim();
+            if (!value) return false;
+
+            const exclude = value.startsWith('-') && value.length > 1;
+            if (exclude) {
+                value = '-' + value.slice(1).trim();
+            } else {
+                value = value.replace(/^-+/, '');
+            }
+            if (!value || value === '-') return false;
+
+            const base = tagBaseName(value);
+            selectedTags = selectedTags.filter(t => tagBaseName(t) !== base);
+            selectedTags.push(value);
+            renderTagChips();
+            tagInput.value = '';
+            hideTagSuggestions();
+            if (autoSearch && hasActiveFilters()) search(1);
+            return true;
+        }
+
+        function removeSelectedTag(tag) {
+            const base = tagBaseName(tag);
+            selectedTags = selectedTags.filter(t => tagBaseName(t) !== base);
+            renderTagChips();
+        }
+
+        function setSelectedTagsFromString(str) {
+            const seen = new Set();
+            selectedTags = (str || '').split(',').map(t => t.trim()).filter(t => {
+                if (!t || t === '-') return false;
+                const base = tagBaseName(t);
+                if (seen.has(base)) return false;
+                seen.add(base);
+                return true;
+            }).map(t => isExcludeTag(t) ? '-' + t.replace(/^-+/, '') : t.replace(/^-+/, ''));
+            renderTagChips();
+        }
+
+        function getTagsParam() {
+            return selectedTags.join(',');
+        }
+
+        async function fetchTagSuggestions(query) {
+            const params = new URLSearchParams({ limit: '30', q: query });
+            if (sourceFilter.value !== 'all') params.set('source', sourceFilter.value);
+            const response = await fetch(`/api/tags?${params}`);
+            const data = await response.json();
+            return data.tags || [];
+        }
+
+        function highlightSuggestion(index) {
+            tagSuggestions.querySelectorAll('.tag-suggestion').forEach((el, i) => {
+                el.classList.toggle('active', i === index);
+            });
+        }
+
+        function showTagSuggestions(tags) {
+            const available = tags.filter(item =>
+                !selectedTags.some(t => tagBaseName(t) === item.tag.toLowerCase())
+            );
+            if (!available.length) {
+                hideTagSuggestions();
+                return;
+            }
+            const excluding = tagInput.value.trim().startsWith('-');
+            tagSuggestIndex = -1;
+            tagSuggestions.innerHTML = available.map((item, i) => `
+                <button type="button"
+                        class="tag-suggestion w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-dark-hover hover:text-purple-300 flex justify-between gap-3 border-b border-dark-border/30 last:border-0"
+                        data-tag="${escapeAttr(excluding ? '-' + item.tag : item.tag)}"
+                        data-index="${i}">
+                    <span class="truncate">${excluding ? '− ' : ''}${escapeHtml(item.tag)}</span>
+                    <span class="text-gray-500 text-xs flex-shrink-0">${Number(item.count).toLocaleString()}</span>
+                </button>
+            `).join('');
+            tagSuggestions.classList.remove('hidden');
+        }
+
+        function hideTagSuggestions() {
+            tagSuggestions.classList.add('hidden');
+            tagSuggestIndex = -1;
+        }
+
+        function tagInputReady() {
+            const raw = tagInput.value.trim();
+            const query = raw.startsWith('-') ? raw.slice(1).trim() : raw;
+            return query.length >= 2;
+        }
+
+        function scheduleTagSuggestions() {
+            clearTimeout(tagSuggestTimeout);
+            tagSuggestTimeout = setTimeout(async () => {
+                const raw = tagInput.value.trim();
+                const query = raw.startsWith('-') ? raw.slice(1).trim() : raw;
+                if (query.length < 2) {
+                    hideTagSuggestions();
+                    return;
+                }
+                try {
+                    const tags = await fetchTagSuggestions(query);
+                    showTagSuggestions(tags);
+                } catch (e) {
+                    console.error('Tag suggestions failed:', e);
+                    hideTagSuggestions();
+                }
+            }, 250);
+        }
+
+        function selectSuggestionTag(tag) {
+            addSelectedTag(tag, true);
+            tagInput.focus();
+        }
+
+        function selectActiveSuggestion() {
+            const items = tagSuggestions.querySelectorAll('.tag-suggestion');
+            if (!items.length) return false;
+            const index = tagSuggestIndex >= 0 ? tagSuggestIndex : 0;
+            selectSuggestionTag(items[index].dataset.tag);
+            return true;
+        }
+
+        // Filter helpers
+        function getSortValues() {
+            const [sort, order] = sortFilter.value.split(':');
+            return { sort, order };
+        }
+
+        function hasActiveFilters() {
+            return (BROWSE_ALL_ENABLED && browseAllMode)
+                || nameFilter.value.trim()
+                || authorFilter.value.trim()
+                || selectedTags.length > 0
+                || sourceFilter.value !== 'all';
+        }
+
+        function buildSearchParams(page = 1) {
+            const params = new URLSearchParams();
+            const name = nameFilter.value.trim();
+            const author = authorFilter.value.trim();
+            const tags = getTagsParam();
+            const source = sourceFilter.value;
+            const { sort, order } = getSortValues();
+
+            if (name) params.set('name', name);
+            if (author) params.set('author', author);
+            if (tags) params.set('tags', tags);
+            if (source !== 'all') params.set('source', source);
+            if (BROWSE_ALL_ENABLED && browseAllMode && !name && !author && !tags && source === 'all') {
+                params.set('browse', 'all');
+            }
+            if (sort !== 'added' || order !== 'desc') {
+                params.set('sort', sort);
+                params.set('order', order);
+            }
+            if (page > 1) params.set('page', String(page));
+
+            return params;
+        }
+
+        function buildAppUrl(page = 1) {
+            const params = buildSearchParams(page);
+            const query = params.toString();
+            return query ? `/?${query}` : '/';
+        }
+
+        function applyParamsToFilters(params) {
+            nameFilter.value = params.get('name') || '';
+            authorFilter.value = params.get('author') || '';
+            setSelectedTagsFromString(params.get('tags') || '');
+            const sourceParam = params.get('source') || 'all';
+            sourceFilter.value = SOURCE_IDS.has(sourceParam) ? sourceParam : 'all';
+            browseAllMode = BROWSE_ALL_ENABLED && params.get('browse') === 'all';
+
+            const sort = params.get('sort') || 'added';
+            const order = params.get('order') || 'desc';
+            sortFilter.value = `${sort}:${order}`;
+        }
+
+        function clearFilters() {
+            browseAllMode = false;
+            nameFilter.value = '';
+            authorFilter.value = '';
+            selectedTags = [];
+            renderTagChips();
+            tagInput.value = '';
+            hideTagSuggestions();
+            sourceFilter.value = 'all';
+            sortFilter.value = 'added:desc';
+            currentPage = 1;
+            results.innerHTML = '';
+            noResults.classList.add('hidden');
+            resultsInfo.classList.add('hidden');
+            pagination.classList.add('hidden');
+            welcome.classList.remove('hidden');
+            history.replaceState(null, '', '/');
+        }
+
+        function browseAllCharacters() {
+            if (!BROWSE_ALL_ENABLED) return;
+            nameFilter.value = '';
+            authorFilter.value = '';
+            selectedTags = [];
+            renderTagChips();
+            tagInput.value = '';
+            hideTagSuggestions();
+            sourceFilter.value = 'all';
+            sortFilter.value = 'added:desc';
+            browseAllMode = true;
+            closeModalHandler();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            search(1);
+        }
+
+        function browseSource(source) {
+            browseAllMode = false;
+            nameFilter.value = '';
+            authorFilter.value = '';
+            selectedTags = [];
+            renderTagChips();
+            tagInput.value = '';
+            hideTagSuggestions();
+            sourceFilter.value = source;
+            sortFilter.value = 'added:desc';
+            closeModalHandler();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            search(1);
+        }
+
+        function filterByAuthor(author) {
+            const value = (author || '').trim();
+            if (!value || value === 'Unknown author' || value === 'Unknown') return;
+            authorFilter.value = value;
+            closeModalHandler();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            search(1);
+        }
+
+        function filterByTag(tag) {
+            const value = (tag || '').trim();
+            if (!value) return;
+            addSelectedTag(value);
+            closeModalHandler();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            search(1);
+        }
+
+        function expandModalTags(expandBtn) {
+            const container = expandBtn.closest('.tag-list');
+            if (!container) return;
+            container.querySelector('.tag-extra')?.classList.remove('hidden');
+            expandBtn.remove();
+        }
+
+        function buildTagFilterUrl(tag) {
+            const params = new URLSearchParams();
+            params.set('tags', tag.trim());
+            return `/?${params.toString()}`;
+        }
+
+        function renderModalAuthor(author) {
+            const value = (author || '').trim();
+            if (!value || value === 'Unknown') {
+                return `<p class="text-gray-400 text-base">by <span class="text-purple-400 font-medium">Unknown</span></p>`;
+            }
+            return `<p class="text-gray-400 text-base">by <button type="button" class="filter-author text-purple-400 font-medium hover:underline cursor-pointer bg-transparent border-0 p-0" data-author="${escapeAttr(value)}">${escapeHtml(value)}</button></p>`;
+        }
+
+        function renderModalTags(tags) {
+            if (!tags.length) return '';
+
+            const limit = 10;
+            const normalized = tags.map(t => String(t).trim()).filter(Boolean);
+            const renderTagBtn = (tag) => `
+                <a href="${buildTagFilterUrl(tag)}"
+                   class="filter-tag inline-block bg-dark-bg text-xs px-2.5 py-1 rounded-full text-gray-400 border border-dark-border/50 hover:border-purple-500/50 hover:text-purple-300 transition-colors no-underline"
+                   data-tag="${escapeAttr(tag)}"
+                   title="Filter by tag: ${escapeHtml(tag)}">${escapeHtml(tag)}</a>`;
+
+            const visible = normalized.slice(0, limit).map(renderTagBtn).join('');
+            const hidden = normalized.slice(limit);
+            const hiddenHtml = hidden.length
+                ? `<span class="tag-extra hidden flex flex-wrap gap-1.5">${hidden.map(renderTagBtn).join('')}</span>`
+                : '';
+            const expandBtn = hidden.length
+                ? `<button type="button" class="tag-expand text-xs text-purple-400 hover:text-purple-300 px-2 py-1">+${hidden.length} more</button>`
+                : '';
+
+            return `
+                <div class="mb-5">
+                    <div class="tag-list flex flex-wrap gap-1.5 items-center">
+                        ${visible}${expandBtn}${hiddenHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderCard(char) {
+            const cardUrl = `/character/${encodeURIComponent(char.source)}/${encodeURIComponent(String(char.id))}`;
+            return `
+                <a href="${cardUrl}"
+                   class="character-card block bg-dark-card rounded-2xl overflow-hidden border border-dark-border/50 hover:border-purple-500/40 transition-all duration-300 cursor-pointer fade-in group card-lift shadow-card hover:shadow-card-hover no-underline"
+                   data-source="${escapeHtml(char.source)}"
+                   data-id="${escapeHtml(String(char.id))}">
+                    <div class="relative overflow-hidden">
+                        <img
+                            src="/image/${char.image_hash}"
+                            alt="${escapeHtml(char.name || 'Character')}"
+                            class="card-image w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+                            loading="lazy"
+                            onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23141418%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23444%22 font-size=%2240%22>?</text></svg>'"
+                        >
+                        <div class="absolute inset-0 image-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                        <div class="absolute top-2.5 right-2.5">
+                            <span class="bg-dark-bg/90 backdrop-blur-sm text-xs px-2.5 py-1 rounded-full text-gray-300 border border-dark-border/50 font-medium">${escapeHtml(char.source)}</span>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-semibold text-white truncate text-sm sm:text-base group-hover:text-purple-300 transition-colors duration-300">${escapeHtml(char.name || 'Unnamed')}</h3>
+                        ${char.author
+                            ? `<p class="text-sm text-gray-400 truncate mt-1">by <span role="button" tabindex="0" class="filter-author text-purple-400/80 hover:text-purple-300 hover:underline" data-author="${escapeAttr(char.author)}">${escapeHtml(char.author)}</span></p>`
+                            : `<p class="text-sm text-gray-400 truncate mt-1">Unknown author</p>`}
+                        ${char.tagline ? `<p class="text-xs text-gray-400 mt-2 line-clamp-2 leading-relaxed">${escapeHtml(cleanCardText(char.tagline))}</p>` : ''}
+                    </div>
+                </a>
+            `;
+        }
+
+        // Search function
+        async function search(page = 1, updateUrl = true) {
+            if (!hasActiveFilters()) {
+                clearFilters();
+                return;
+            }
+
             currentPage = page;
+
+            if (updateUrl) {
+                history.replaceState(null, '', buildAppUrl(page));
+            }
 
             showLoading();
 
             try {
-                const response = await fetch(`/api/search?q=${encodeURIComponent(query)}&source=${currentSource}&page=${page}&per_page=24`);
+                const params = buildSearchParams(page);
+                params.set('per_page', '24');
+                const response = await fetch(`/api/search?${params}`);
                 const data = await response.json();
 
                 loading.classList.add('hidden');
 
                 if (data.results.length === 0) {
+                    results.innerHTML = '';
                     noResults.classList.remove('hidden');
                     resultsInfo.classList.add('hidden');
                     pagination.classList.add('hidden');
                     return;
                 }
 
-                // Update results info
+                noResults.classList.add('hidden');
                 resultsInfo.classList.remove('hidden');
                 resultCount.textContent = `Found ${data.total.toLocaleString()} characters`;
+                results.innerHTML = data.results.map(renderCard).join('');
 
-                // Render results with enhanced card design
-                results.innerHTML = data.results.map(char => `
-                    <div class="character-card bg-dark-card rounded-2xl overflow-hidden border border-dark-border/50 hover:border-purple-500/40 transition-all duration-300 cursor-pointer fade-in group card-lift shadow-card hover:shadow-card-hover"
-                         data-source="${escapeHtml(char.source)}"
-                         data-id="${escapeHtml(String(char.id))}">
-                        <div class="relative overflow-hidden">
-                            <img
-                                src="/image/${char.image_hash}"
-                                alt="${escapeHtml(char.name || 'Character')}"
-                                class="card-image w-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                                loading="lazy"
-                                onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23141418%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23444%22 font-size=%2240%22>?</text></svg>'"
-                            >
-                            <!-- Gradient overlay -->
-                            <div class="absolute inset-0 image-overlay opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                            <!-- Source badge -->
-                            <div class="absolute top-2.5 right-2.5">
-                                <span class="bg-dark-bg/90 backdrop-blur-sm text-xs px-2.5 py-1 rounded-full text-gray-300 border border-dark-border/50 font-medium">${escapeHtml(char.source)}</span>
-                            </div>
-                        </div>
-                        <div class="p-4">
-                            <h3 class="font-semibold text-white truncate text-sm sm:text-base group-hover:text-purple-300 transition-colors duration-300">${escapeHtml(char.name || 'Unnamed')}</h3>
-                            <p class="text-sm text-gray-400 truncate mt-1">${escapeHtml(char.author || 'Unknown author')}</p>
-                            ${char.tagline ? `<p class="text-xs text-gray-400 mt-2 line-clamp-2 leading-relaxed">${escapeHtml(cleanCardText(char.tagline))}</p>` : ''}
-                        </div>
-                    </div>
-                `).join('');
-
-                // Update pagination
                 totalPages = data.pages;
                 if (totalPages > 1) {
                     pagination.classList.remove('hidden');
@@ -508,6 +905,19 @@
                 loading.classList.add('hidden');
                 noResults.classList.remove('hidden');
             }
+        }
+
+        function initFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            if (!params.toString()) return false;
+
+            applyParamsToFilters(params);
+            const page = Math.max(parseInt(params.get('page') || '1', 10), 1);
+            if (hasActiveFilters()) {
+                search(page, false);
+                return true;
+            }
+            return false;
         }
 
         // Show character details with enhanced modal
@@ -589,7 +999,7 @@
                             <!-- Header -->
                             <div class="mb-5">
                                 <h2 class="text-2xl sm:text-3xl font-bold text-white mb-2">${escapeHtml(char.name || 'Unnamed Character')}</h2>
-                                <p class="text-gray-400 text-base">by <span class="text-purple-400 font-medium">${escapeHtml(char.author || 'Unknown')}</span></p>
+                                ${renderModalAuthor(char.author)}
                             </div>
 
                             <!-- Meta badges -->
@@ -598,15 +1008,7 @@
                                 ${char.added ? `<span class="bg-dark-bg text-gray-400 text-xs px-3 py-1.5 rounded-full font-medium border border-dark-border">${new Date(char.added).toLocaleDateString()}</span>` : ''}
                             </div>
 
-                            <!-- Tags -->
-                            ${tags.length > 0 ? `
-                                <div class="mb-5">
-                                    <div class="flex flex-wrap gap-1.5">
-                                        ${tags.slice(0, 10).map(tag => `<span class="bg-dark-bg text-xs px-2.5 py-1 rounded-full text-gray-400 border border-dark-border/50 hover:border-purple-500/30 transition-colors">${escapeHtml(tag.trim())}</span>`).join('')}
-                                        ${tags.length > 10 ? `<span class="text-xs text-gray-500 px-2 py-1">+${tags.length - 10} more</span>` : ''}
-                                    </div>
-                                </div>
-                            ` : ''}
+                            ${renderModalTags(tags)}
 
                             <!-- Description -->
                             ${description ? `
@@ -661,6 +1063,10 @@
             return div.innerHTML;
         }
 
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;');
+        }
+
         // Clean up character card formatting from text
         function cleanCardText(text) {
             if (!text) return '';
@@ -690,11 +1096,69 @@
 
         // Event listeners
         searchBtn.addEventListener('click', () => search(1));
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') search(1);
+        clearBtn.addEventListener('click', clearFilters);
+        [nameFilter, authorFilter].forEach(el => {
+            el.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') search(1);
+            });
         });
+
+        tagInput.addEventListener('input', scheduleTagSuggestions);
+        tagInput.addEventListener('focus', scheduleTagSuggestions);
+        tagInput.addEventListener('keydown', (e) => {
+            const items = tagSuggestions.querySelectorAll('.tag-suggestion');
+            if (e.key === 'ArrowDown' && items.length) {
+                e.preventDefault();
+                tagSuggestIndex = Math.min(tagSuggestIndex + 1, items.length - 1);
+                highlightSuggestion(tagSuggestIndex);
+            } else if (e.key === 'ArrowUp' && items.length) {
+                e.preventDefault();
+                tagSuggestIndex = Math.max(tagSuggestIndex - 1, 0);
+                highlightSuggestion(tagSuggestIndex);
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (tagSuggestions.classList.contains('hidden')) {
+                    if (tagInputReady()) {
+                        addSelectedTag(tagInput.value.trim(), true);
+                    }
+                } else if (!selectActiveSuggestion() && tagInputReady()) {
+                    addSelectedTag(tagInput.value.trim(), true);
+                }
+            } else if (e.key === 'Escape') {
+                hideTagSuggestions();
+            } else if (e.key === 'Backspace' && !tagInput.value && selectedTags.length) {
+                removeSelectedTag(selectedTags[selectedTags.length - 1]);
+            }
+        });
+
+        tagChips.addEventListener('click', (e) => {
+            const btn = e.target.closest('.tag-chip-remove');
+            if (btn) {
+                e.preventDefault();
+                removeSelectedTag(btn.dataset.tag);
+                if (hasActiveFilters()) search(1);
+            }
+        });
+
+        tagSuggestions.addEventListener('click', (e) => {
+            const btn = e.target.closest('.tag-suggestion');
+            if (btn) {
+                e.preventDefault();
+                selectSuggestionTag(btn.dataset.tag);
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!tagPicker.contains(e.target)) hideTagSuggestions();
+        });
+
         sourceFilter.addEventListener('change', () => {
-            if (currentQuery) search(1);
+            hideTagSuggestions();
+            if (tagInputReady()) scheduleTagSuggestions();
+            if (hasActiveFilters()) search(1);
+        });
+        sortFilter.addEventListener('change', () => {
+            if (hasActiveFilters()) search(1);
         });
         prevPage.addEventListener('click', () => search(currentPage - 1));
         nextPage.addEventListener('click', () => search(currentPage + 1));
@@ -704,21 +1168,67 @@
             if (e.key === 'Escape') closeModalHandler();
         });
 
-        // Event delegation for character cards (handles special characters in IDs)
+        // Normal click opens modal; modified click opens link in new tab
         results.addEventListener('click', (e) => {
-            const card = e.target.closest('.character-card');
-            if (card) {
-                const source = card.dataset.source;
-                const id = card.dataset.id;
-                if (source && id) {
-                    showCharacter(source, id);
-                }
+            const authorEl = e.target.closest('.filter-author');
+            if (authorEl) {
+                e.preventDefault();
+                e.stopPropagation();
+                filterByAuthor(authorEl.dataset.author);
+                return;
             }
+
+            const card = e.target.closest('.character-card');
+            if (!card) return;
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            showCharacter(card.dataset.source, card.dataset.id);
+        });
+
+        modalContent.addEventListener('click', (e) => {
+            const authorEl = e.target.closest('.filter-author');
+            if (authorEl) {
+                e.preventDefault();
+                filterByAuthor(authorEl.dataset.author);
+                return;
+            }
+
+            const tagEl = e.target.closest('.filter-tag');
+            if (tagEl) {
+                if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+                e.preventDefault();
+                filterByTag(tagEl.dataset.tag);
+                return;
+            }
+
+            const expandEl = e.target.closest('.tag-expand');
+            if (expandEl) {
+                e.preventDefault();
+                expandModalTags(expandEl);
+            }
+        });
+
+        if (BROWSE_ALL_ENABLED) {
+            stats.addEventListener('click', browseAllCharacters);
+        }
+
+        document.getElementById('sourceBrowse').addEventListener('click', (e) => {
+            const link = e.target.closest('.source-browse');
+            if (!link) return;
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            browseSource(link.dataset.source);
         });
 
         // Initialize
         loadStats();
-        searchInput.focus();
+        const restoredFromUrl = initFromUrl();
+        if (OPEN_CHARACTER) {
+            welcome.classList.add('hidden');
+            showCharacter(OPEN_CHARACTER.source, OPEN_CHARACTER.id);
+        } else if (!restoredFromUrl) {
+            nameFilter.focus();
+        }
     </script>
 </body>
 </html>

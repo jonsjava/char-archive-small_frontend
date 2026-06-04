@@ -7,13 +7,18 @@ A Flask-based web application for searching and downloading character cards from
 
 ## Features
 
-- **Full-text search** across all character sources (Chub, JanitorAI, RisuAI, Character Tavern, Booru, Webring, Generic)
-- **Character card previews** with lazy-loaded images
-- **Detailed character modal** showing tags, description, and first message
-- **Card downloads** in PNG format with embedded character data
-- **Source filtering** to search specific platforms
-- **Responsive design** with dark theme and purple gradient accents
-- **Pagination** with customizable results per page
+- **Search** by name, author, and tags across Chub, Generic, Booru, Webring, Character Tavern, RisuAI, and Nyaime
+- **Tag filtering** with autocomplete suggestions, required tags (comma-separated AND), and exclusions (`-tag`); backed by a pre-built `tag_index` for fast lookups
+- **Author filter** plus click-through from result cards and the detail modal to search by author or tag
+- **Sort** by date added or name, ascending or descending
+- **Shareable URLs** — search filters and pagination are reflected in the address bar
+- **Direct character links** at `/character/<source>/<id>` (opens the detail modal)
+- **Character card previews** with lazy-loaded images (flat or sharded archive layouts via env config)
+- **Detail modal** with tags, description, first message, and expandable tag list
+- **Card downloads** as PNG (embedded character data) or raw JSON
+- **Source filtering** per platform; optional **browse-all** mode when `ENABLE_BROWSE_ALL` is enabled
+- **Archive stats** with per-source counts on the home page
+- **Responsive design** with dark theme, purple gradient accents, and customizable results per page
 
 ## Architecture
 
@@ -44,61 +49,39 @@ Single-page application using:
 - Docker Engine (20.10+)
 - Docker Compose (v2.0+)
 - PostgreSQL database with Character Archive data
-- Image archive at `../archive/hashed-data/`
+- Image archive on disk (see [Image storage](#image-storage); Character Archive torrent uses **sharded** layout under `hashed-data/`)
 
 ## Quick Start
 
 ### 1. Set Up Environment Variables
 
-Create a `.env` file or set environment variables:
+From the repository root:
 
 ```bash
-DB_HOST=postgres              # PostgreSQL host
-DB_PORT=5432                  # PostgreSQL port
-DB_NAME=char_archive          # Database name
-DB_USER=char_archive          # Database user
-DB_PASSWORD=your_password     # Database password
-ARCHIVE_PATH=/archive         # Path to archive images
+cp .env.example .env
+# Edit passwords, BIND_HOST (e.g. Tailscale IP), and ports
 ```
+
+Compose mounts `./archive` at `/archive` and sets image path variables for the **sharded** layout by default (`IMAGE_LAYOUT=sharded`, `IMAGE_SUBDIR=hashed-data` in root `.env.example`). Change these if your files use a different layout (see [Image storage](#image-storage)).
 
 ### 2. Run with Docker Compose
 
-Add this service to your `docker-compose.yml`:
-
-```yaml
-services:
-  frontend:
-    build:
-      context: ./small_front
-      dockerfile: Dockerfile
-    environment:
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: char_archive
-      DB_USER: char_archive
-      DB_PASSWORD: your_password_here
-      ARCHIVE_PATH: /archive
-    volumes:
-      - ./archive:/archive:ro
-    ports:
-      - "8080:5000"
-    depends_on:
-      - postgres
-    networks:
-      - char_archive_network
-```
-
-Start the services:
+First-time import (empty `db_data/postgres`):
 
 ```bash
-docker compose up -d frontend
+docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+docker compose logs -f postgres   # wait for restore to finish
+```
+
+Normal operation (database already imported):
+
+```bash
+docker compose up -d
 ```
 
 ### 3. Access the Frontend
 
-Open your browser and navigate to:
-- Local: `http://localhost:8080`
-- Tailscale: `http://100.108.69.91:8080` (if configured)
+Open your browser at `http://<BIND_HOST or localhost>:8080` (or the port you set in `FRONTEND_PORT`).
 
 ## Development
 
@@ -115,22 +98,24 @@ cd char-archive-small_frontend/small_front
 pip install -r requirements.txt
 ```
 
-3. Set environment variables:
+3. Configure environment (copy `small_front/.env.example` to `small_front/.env`, or export variables):
 ```bash
 export DB_HOST=localhost
 export DB_PORT=5432
 export DB_NAME=char_archive
 export DB_USER=char_archive
 export DB_PASSWORD=your_password
-export ARCHIVE_PATH=/path/to/archive
+export ARCHIVE_PATH=/path/to/archive          # parent of image files
+export IMAGE_LAYOUT=sharded                   # flat | sharded — see Image storage
+export IMAGE_SUBDIR=hashed-data               # optional subfolder under ARCHIVE_PATH
 ```
 
 4. Run the Flask app:
 ```bash
-python app.py
+./runme.sh
 ```
 
-The app will be available at `http://localhost:5000`
+`runme.sh` loads `.env`, creates/activates the virtualenv if needed, installs dependencies, then starts the app. Default URL: `http://localhost:5000` (set `PORT` in `.env` to change).
 
 ### Rebuild After Changes
 
@@ -218,15 +203,66 @@ Each table follows the pattern:
   - `image_hash`: MD5 hash for image lookup
   - `metadata` (JSON): Safety ratings and token info
 
-## Image Storage
+## Image storage
 
-Images are stored in `archive/hashed-data/` using MD5 hash sharding:
+The frontend resolves files from `image_hash` in the database using three settings (see `small_front/app.py` and `small_front/.env.example`):
 
-**Path format:** `/{h[0]}/{h[1]}/{h[2]}/{h[3:]}`
+| Variable | Role |
+|----------|------|
+| `ARCHIVE_PATH` | Root directory for images (Docker: `/archive` with `./archive` mounted) |
+| `IMAGE_SUBDIR` | Optional folder under `ARCHIVE_PATH` (e.g. `hashed-data`; leave empty if hashes sit directly under the root) |
+| `IMAGE_LAYOUT` | How each hash maps to a path: `flat` or `sharded` |
 
-**Example:**
-- Hash: `54db4830ceab552d4824dd5b016f4b06`
-- Path: `/5/4/d/b4830ceab552d4824dd5b016f4b06`
+Effective lookup root: `ARCHIVE_PATH` / `IMAGE_SUBDIR` (if set).
+
+### Sharded layout (`IMAGE_LAYOUT=sharded`)
+
+Default for Docker Compose and the Character Archive image store. Files are split by the first three hex digits of the MD5 hash.
+
+**Path:** `{root}/{h[0]}/{h[1]}/{h[2]}/{h[3:]}`
+
+**Example** (hash `54db4830ceab552d4824dd5b016f4b06`, `IMAGE_SUBDIR=hashed-data`):
+
+```
+archive/hashed-data/5/4/d/b4830ceab552d4824dd5b016f4b06
+```
+
+**Docker / root `.env`:**
+
+```env
+IMAGE_LAYOUT=sharded
+IMAGE_SUBDIR=hashed-data
+```
+
+### Flat layout (`IMAGE_LAYOUT=flat`)
+
+One file per hash, named with the full hash, directly under the image root (no `h[0]/h[1]/h[2]/` prefix directories).
+
+**Path:** `{root}/{full-hash}`
+
+**Example** (same hash, no subdir):
+
+```
+/mnt/images/54db4830ceab552d4824dd5b016f4b06
+```
+
+**Local dev (`small_front/.env.example` defaults):**
+
+```env
+IMAGE_LAYOUT=flat
+IMAGE_SUBDIR=
+```
+
+Use flat when your archive stores `{ARCHIVE_PATH}/{hash}` files. Use sharded when they live under the hashed directory tree (as in `docs/FILE_STRUCTURE.md`).
+
+### Choosing settings
+
+| Your files on disk | `IMAGE_LAYOUT` | `IMAGE_SUBDIR` |
+|--------------------|----------------|----------------|
+| `archive/hashed-data/5/4/d/...` | `sharded` | `hashed-data` |
+| `archive/5/4/d/...` (no extra folder) | `sharded` | *(empty)* |
+| `archive/<full-md5>` | `flat` | *(empty)* |
+| `archive/cards/<full-md5>` | `flat` | `cards` |
 
 ## Troubleshooting
 
@@ -236,9 +272,10 @@ Images are stored in `archive/hashed-data/` using MD5 hash sharding:
 - Test database directly: `docker compose exec postgres psql -U char_archive -d char_archive`
 
 ### Images not loading
-- Verify archive volume is mounted correctly
-- Check image hash exists in `archive/hashed-data/`
-- Verify file permissions on archive folder
+- Verify archive volume is mounted correctly (`ARCHIVE_PATH` inside the container should match your host tree)
+- Confirm `IMAGE_LAYOUT` and `IMAGE_SUBDIR` match how files are actually stored (wrong layout looks like “missing” images)
+- Check the file exists at the resolved path for a known `image_hash` (sharded vs flat examples above)
+- Verify file permissions on the archive folder
 
 ### Container keeps restarting
 - Check logs: `docker compose logs frontend`
@@ -255,21 +292,33 @@ Images are stored in `archive/hashed-data/` using MD5 hash sharding:
 ```
 char-archive-small_frontend/
 ├── README.md                      # This file
-├── docker-compose.yml             # Production Docker Compose config
-├── docker-compose.import.yml      # Docker Compose with DB import
-├── init-db.sh                     # Database initialization script
-├── docs/                          # Documentation
+├── .env.example                   # Docker Compose env template (copy to .env)
+├── .gitignore
+├── char-archive_final.torrent     # Torrent for full archive + database dump
+├── docker-compose.yml             # Stack: postgres, pgadmin, frontend
+├── docker-compose.import.yml      # DB import overlay (merge with base compose)
+├── init-db.sh                     # Restores database.dump on empty Postgres data dir
+├── database.dump                  # PostgreSQL custom-format dump (local; gitignored; for import)
+├── archive/                       # Image files (local; gitignored — mount into frontend)
+├── db_data/                       # Postgres + pgAdmin persistence (local; gitignored)
+├── docs/
 │   ├── MIGRATION.md               # Server migration guide
 │   ├── setup-guide.md             # Complete Docker setup
 │   ├── frontend-guide.md          # API and architecture details
 │   ├── DATABASE_STRUCTURE.md      # Full database schema
-│   └── FILE_STRUCTURE.md          # Image storage layout
+│   └── FILE_STRUCTURE.md          # Image storage layout (sharded paths)
 └── small_front/                   # Frontend application
+    ├── .env.example               # Local dev env (copy to .env; IMAGE_LAYOUT, etc.)
     ├── app.py                     # Flask API backend
-    ├── templates/
-    │   └── index.html             # Tailwind CSS frontend
+    ├── Dockerfile                 # Container image for Compose frontend service
     ├── requirements.txt           # Python dependencies
-    └── Dockerfile                 # Container configuration
+    ├── rebuild_tag_index.py       # Rebuild tag search index in PostgreSQL
+    ├── rebuild_tags.example.sh    # Example wrapper; copy to rebuild_tags.sh (gitignored)
+    ├── runme.sh                   # Local dev launcher (gitignored; sources .env, runs app.py)
+    ├── sql/
+    │   └── tag_index.sql          # Tag index DDL used by rebuild_tag_index.py
+    └── templates/
+        └── index.html             # Tailwind CSS frontend
 ```
 
 ## Dependencies

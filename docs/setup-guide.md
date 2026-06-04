@@ -112,29 +112,20 @@ docker compose up -d
 
 ## Database Import (Manual)
 
-The database has already been imported from `database.dump`. If you need to re-import or import on a fresh setup, use the backup compose file which includes auto-import functionality.
+The database has already been imported from `database.dump`. If you need to re-import or import on a fresh setup, merge `docker-compose.import.yml` (mounts `database.dump` and `init-db.sh`).
 
-### Using the Backup Compose File (with auto-import)
+### Fresh import (auto-restore)
 
-A backup of the docker-compose.yml with database import capability is stored at `docs/docker-compose.yml.backup`. This version includes:
-- Mounting of `database.dump` file
-- Mounting of `init-db.sh` script for automatic restoration
-
-To use it for a fresh import:
 ```bash
+cp .env.example .env   # edit passwords and BIND_HOST
 docker compose down
 sudo rm -rf db_data/postgres db_data/pgadmin
 mkdir -p db_data/postgres db_data/pgadmin
-cp docs/docker-compose.yml.backup docker-compose.yml
-docker compose up -d
-docker compose logs -f postgres  # Watch import progress
+docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+docker compose logs -f postgres   # watch import progress
 ```
 
-After import completes, restore the production compose file:
-```bash
-# Copy current (production) compose back
-# Or simply remove the import volume mounts manually
-```
+After import completes, use the base file only: `docker compose up -d`.
 
 ### Manual Import with pg_restore
 
