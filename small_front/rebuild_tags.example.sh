@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 # Rebuild the tag index (run once after restoring the database, or after bulk imports).
 #
-# Setup:
-#   cp .env.example .env   # edit with your DB credentials
-#   cp rebuild_tags.example.sh rebuild_tags.sh
-#   chmod +x rebuild_tags.sh
-#   ./rebuild_tags.sh
+# Linux/macOS:  cp rebuild_tags.example.sh rebuild_tags.sh && ./rebuild_tags.sh
+# Windows:      .\rebuild_tags.ps1
 
 set -euo pipefail
 cd "$(dirname "$0")"

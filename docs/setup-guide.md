@@ -205,7 +205,14 @@ createdb char_archive -O char_archive
 pg_restore -U char_archive -d char_archive /path/to/character-archive-final-torrent/database.dump
 ```
 
-**Windows (PowerShell):** open a terminal where `psql` and `pg_restore` are on PATH (PostgreSQL install directory `bin` folder), then run the same commands. Alternatively, create the user and database in pgAdmin, then restore `database.dump` via pgAdmin's restore dialog.
+**Windows (PowerShell):**
+
+```powershell
+# Create user/database via psql or pgAdmin first, then:
+.\init-db.ps1 -DumpPath "C:\Downloads\character-archive-final-torrent\database.dump"
+```
+
+Requires `psql` and `pg_restore` on PATH (PostgreSQL install `bin` folder). Alternatively, create the user and database in pgAdmin, then restore `database.dump` via pgAdmin's restore dialog.
 
 ### 2. Configure `small_front/.env`
 
@@ -258,18 +265,43 @@ Open **http://localhost:5000**. The launcher scripts create a virtualenv on firs
 After restoring `database.dump`, rebuild the tag index once:
 
 ```bash
+# Linux/macOS
 cd small_front
 cp rebuild_tags.example.sh rebuild_tags.sh && chmod +x rebuild_tags.sh
 ./rebuild_tags.sh
 ```
 
-To import new cards without Docker, run the watcher in a separate terminal (from `small_front/` with `.env` configured):
+```powershell
+# Windows
+cd small_front
+.\rebuild_tags.ps1
+```
+
+To import new cards without Docker, drop files into `import/` while the app is running via `runme.sh` / `runme.ps1` — scanning is enabled by default (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`).
+
+To run the watcher without the Flask app:
 
 ```bash
+# Linux/macOS
 python import_watcher.py
 ```
 
-Drop PNG or JSON files into the repo's `import/` folder. Set `IMPORT_DIR=../import` in `small_front/.env` (default in `.env.example`).
+```powershell
+# Windows
+.\import_watcher.ps1
+```
+
+Set `IMPORT_DIR=../import` in `small_front/.env` (default in `.env.example`).
+
+### Script reference (local dev)
+
+| Task | Linux / macOS | Windows (PowerShell) |
+|------|---------------|----------------------|
+| Run frontend | `small_front/runme.sh` | `small_front/runme.ps1` |
+| Restore DB (local) | `pg_restore ...` | `.\init-db.ps1 -DumpPath ...` |
+| Rebuild tag index | `small_front/rebuild_tags.sh` | `small_front/rebuild_tags.ps1` |
+| Import watcher | automatic with `runme.sh` / `runme.ps1` | automatic with `runme.ps1` |
+| Import watcher (standalone) | `python import_watcher.py` | `small_front/import_watcher.ps1` |
 
 ## Related docs
 

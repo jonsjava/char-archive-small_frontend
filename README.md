@@ -120,11 +120,19 @@ createdb char_archive -O char_archive
 
 Restore the dump from your torrent folder (first run only; can take 30+ minutes):
 
+**Linux / macOS:**
+
 ```bash
 pg_restore -U char_archive -d char_archive /path/to/character-archive-final-torrent/database.dump
 ```
 
-**Windows (PowerShell):** use the same commands if PostgreSQL's `bin` folder is on your PATH, or run `pg_restore` from pgAdmin's SQL tools.
+**Windows (PowerShell):**
+
+```powershell
+.\init-db.ps1 -DumpPath "C:\Downloads\character-archive-final-torrent\database.dump"
+```
+
+Requires `psql` and `pg_restore` on PATH (PostgreSQL install `bin` folder).
 
 ### 2. Configure the app
 
@@ -166,17 +174,47 @@ Both scripts create a Python virtualenv (if needed), install dependencies, load 
 Rebuild the tag search index after restoring the database:
 
 ```bash
+# Linux/macOS
 cp rebuild_tags.example.sh rebuild_tags.sh && chmod +x rebuild_tags.sh
 ./rebuild_tags.sh
 ```
 
-Watch the `import/` folder for new cards (in a second terminal, from `small_front/`):
+```powershell
+# Windows
+.\rebuild_tags.ps1
+```
+
+Watch the `import/` folder for new cards — when running locally via `runme.sh` / `runme.ps1`, the import scanner starts automatically (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`). Drop files into `import/` while the app is running:
 
 ```bash
+cp my-character.png import/
+```
+
+To run the watcher standalone (without the Flask app):
+
+```bash
+# Linux/macOS
 python import_watcher.py
 ```
 
+```powershell
+# Windows
+.\import_watcher.ps1
+```
+
 See [Setup Guide — Local development](docs/setup-guide.md#local-development-without-docker) for more detail.
+
+### Script reference
+
+| Task | Linux / macOS | Windows (PowerShell) |
+|------|---------------|----------------------|
+| Docker setup | `./setup.sh` | `.\setup.ps1` |
+| Run frontend locally | `small_front/runme.sh` | `small_front/runme.ps1` |
+| Restore DB (local Postgres) | `pg_restore ...` | `.\init-db.ps1 -DumpPath ...` |
+| Rebuild tag index | `small_front/rebuild_tags.sh` | `small_front/rebuild_tags.ps1` |
+| Import folder watcher | automatic with `runme.sh` / `runme.ps1` | automatic with `runme.ps1` |
+| Import watcher (standalone) | `python import_watcher.py` | `small_front/import_watcher.ps1` |
+| Restore DB (Docker) | automatic via `setup.sh` | automatic via `setup.ps1` |
 
 ## Development (Docker)
 
@@ -195,7 +233,12 @@ docker compose logs -f importer
 
 ## Importing cards
 
-Drop character card files into the `import/` folder at the repo root. The **importer** service scans every 60 seconds (configurable via `IMPORT_SCAN_INTERVAL` in `.env`).
+Drop character card files into the `import/` folder at the repo root.
+
+| Mode | How imports run |
+|------|-----------------|
+| **Docker** | `importer` service scans every 60s (`IMPORT_SCAN_INTERVAL` in root `.env`) |
+| **Local dev** | Automatic when using `runme.sh` / `runme.ps1` (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`) |
 
 | Accepted | Notes |
 |----------|-------|
@@ -206,8 +249,11 @@ Imported cards are added to the **Generic** source. After processing, files move
 
 ```bash
 cp my-character.png import/
-docker compose logs -f importer   # watch import progress
+# Local: watch the runme terminal for "Import my-character.png: ok"
+# Docker: docker compose logs -f importer
 ```
+
+Set `ENABLE_IMPORT_SCANNER=false` in `small_front/.env` to disable local scanning.
 
 ## API Usage
 
@@ -374,13 +420,13 @@ char-archive-small_frontend/
 ├── README.md                      # This file
 ├── setup.sh                       # One-shot setup (Linux / macOS)
 ├── setup.ps1                      # One-shot setup (Windows)
+├── init-db.ps1                    # Restore database.dump to local Postgres (Windows)
+├── init-db.sh                     # Restore database.dump (Docker postgres container)
 ├── import/                        # Drop PNG/JSON cards here (watched by importer)
 ├── .env.example                   # Docker Compose env template
-├── .gitignore
-├── docker-compose.yml             # Stack: postgres, pgadmin, frontend
+├── docker-compose.yml             # Stack: postgres, pgadmin, frontend, importer
 ├── docker-compose.import.yml      # DB import overlay (manual/advanced)
 ├── docker-compose.override.example.yml
-├── init-db.sh                     # Restores database.dump on empty Postgres data dir
 ├── db_data/                       # Postgres + pgAdmin persistence (local; gitignored)
 ├── docs/
 │   ├── setup-guide.md             # Install guide (start here)
@@ -394,7 +440,11 @@ char-archive-small_frontend/
     ├── Dockerfile                 # Container image for Compose frontend service
     ├── requirements.txt           # Python dependencies
     ├── rebuild_tag_index.py       # Rebuild tag search index in PostgreSQL
-    ├── rebuild_tags.example.sh    # Example wrapper; copy to rebuild_tags.sh
+    ├── import_watcher.py          # Import folder watcher (Python)
+    ├── rebuild_tags.example.sh    # Example wrapper (Linux/macOS; copy to rebuild_tags.sh)
+    ├── rebuild_tags.ps1           # Rebuild tag index (Windows)
+    ├── import_watcher.ps1         # Import folder watcher (Windows, local dev)
+    ├── dev-env.ps1                # Shared helpers for small_front PowerShell scripts
     ├── runme.sh                   # Local dev launcher (Linux / macOS)
     ├── runme.ps1                  # Local dev launcher (Windows)
     ├── sql/

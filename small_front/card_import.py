@@ -189,37 +189,49 @@ def scan_import_dir():
     import_dir = IMPORT_DIR
     processed_dir = import_dir / 'processed'
     failed_dir = import_dir / 'failed'
+    lock_file = import_dir / '.scan.lock'
 
     for sub in (import_dir, processed_dir, failed_dir):
         sub.mkdir(parents=True, exist_ok=True)
 
-    results = []
-    for path in sorted(import_dir.iterdir()):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in CARD_EXTENSIONS:
-            continue
+    try:
+        fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return []
 
-        try:
-            c_hash, inserted = import_file(path)
-            dest = processed_dir / path.name
-            if dest.exists():
-                dest = processed_dir / f'{path.stem}_{c_hash[:8]}{path.suffix}'
-            shutil.move(str(path), str(dest))
-            results.append({
-                'file': path.name,
-                'status': 'imported' if inserted else 'duplicate',
-                'card_data_hash': c_hash,
-            })
-            print(f"Import {path.name}: {'ok' if inserted else 'duplicate'} ({c_hash})", flush=True)
-        except Exception as exc:
-            dest = failed_dir / path.name
-            if dest.exists():
-                dest = failed_dir / f'{path.stem}_{path.stat().st_mtime_ns}{path.suffix}'
-            shutil.move(str(path), str(dest))
-            err_file = dest.with_suffix(dest.suffix + '.error.txt')
-            err_file.write_text(str(exc), encoding='utf-8')
-            results.append({'file': path.name, 'status': 'failed', 'error': str(exc)})
-            print(f"Import {path.name}: failed — {exc}", flush=True)
+    results = []
+    try:
+        for path in sorted(import_dir.iterdir()):
+            if not path.is_file():
+                continue
+            if path.suffix.lower() not in CARD_EXTENSIONS:
+                continue
+            if path.name == '.scan.lock':
+                continue
+
+            try:
+                c_hash, inserted = import_file(path)
+                dest = processed_dir / path.name
+                if dest.exists():
+                    dest = processed_dir / f'{path.stem}_{c_hash[:8]}{path.suffix}'
+                shutil.move(str(path), str(dest))
+                results.append({
+                    'file': path.name,
+                    'status': 'imported' if inserted else 'duplicate',
+                    'card_data_hash': c_hash,
+                })
+                print(f"Import {path.name}: {'ok' if inserted else 'duplicate'} ({c_hash})", flush=True)
+            except Exception as exc:
+                dest = failed_dir / path.name
+                if dest.exists():
+                    dest = failed_dir / f'{path.stem}_{path.stat().st_mtime_ns}{path.suffix}'
+                shutil.move(str(path), str(dest))
+                err_file = dest.with_suffix(dest.suffix + '.error.txt')
+                err_file.write_text(str(exc), encoding='utf-8')
+                results.append({'file': path.name, 'status': 'failed', 'error': str(exc)})
+                print(f"Import {path.name}: failed — {exc}", flush=True)
+    finally:
+        os.close(fd)
+        lock_file.unlink(missing_ok=True)
 
     return results

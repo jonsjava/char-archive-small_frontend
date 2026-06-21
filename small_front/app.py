@@ -671,7 +671,37 @@ def stats():
         return jsonify({'error': str(e)}), 500
 
 
+def import_scanner_enabled():
+    return os.environ.get('ENABLE_IMPORT_SCANNER', 'false').lower() in ('1', 'true', 'yes')
+
+
+def start_import_scanner():
+    """Background poll of IMPORT_DIR — used for local dev (python app.py), not Docker/gunicorn."""
+    if not import_scanner_enabled():
+        return
+
+    interval = max(int(os.environ.get('IMPORT_SCAN_INTERVAL', '60')), 5)
+    import_dir = os.environ.get('IMPORT_DIR', '../import')
+    print(f'Import scanner enabled — watching {import_dir} every {interval}s', flush=True)
+
+    import threading
+    import time
+
+    def loop():
+        from card_import import scan_import_dir
+        while True:
+            try:
+                scan_import_dir()
+            except Exception as exc:
+                print(f'Import scan error: {exc}', flush=True)
+            time.sleep(interval)
+
+    thread = threading.Thread(target=loop, daemon=True, name='import-scanner')
+    thread.start()
+
+
 if __name__ == '__main__':
     get_available_sources()
+    start_import_scanner()
     port = int(os.environ.get('PORT', 5001))
     app.run(host='0.0.0.0', port=port, debug=True)

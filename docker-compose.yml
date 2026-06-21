@@ -1,4 +1,4 @@
-# Production stack. Easiest path: ./setup.sh (or setup.ps1 on Windows).
+# Production stack. Easiest path: ./setup.sh (Linux/macOS) or .\setup.ps1 (Windows).
 # Manual: copy .env.example to .env, set TORRENT_DIR / paths, docker compose up -d.
 # First-time DB import without setup script: merge docker-compose.import.yml.
 

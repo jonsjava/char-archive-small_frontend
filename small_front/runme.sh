@@ -28,5 +28,7 @@ if [[ -z "${sourced:-}" ]]; then
   source "$VENV_PATH/bin/activate"
 fi
 
+# Enable import folder scanning for local dev (Docker uses the importer service instead).
+export ENABLE_IMPORT_SCANNER="${ENABLE_IMPORT_SCANNER:-true}"
 
 exec python app.py
