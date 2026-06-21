@@ -82,7 +82,7 @@ You need **~200 GiB** for the download plus **~200 GiB** free for extraction. Pl
 **Linux / macOS:**
 
 ```bash
-git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+git clone https://github.com/jonsjava/char-archive-small_frontend.git
 cd char-archive-small_frontend
 ./setup.sh
 ```
@@ -90,7 +90,7 @@ cd char-archive-small_frontend
 **Windows (PowerShell):**
 
 ```powershell
-git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+git clone https://github.com/jonsjava/char-archive-small_frontend.git
 cd char-archive-small_frontend
 .\setup.ps1
 ```
@@ -109,7 +109,7 @@ For manual configuration, flags, and troubleshooting, see the [Setup Guide](docs
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+git clone https://github.com/jonsjava/char-archive-small_frontend.git
 cd char-archive-small_frontend/small_front
 ```
 

@@ -47,7 +47,7 @@ character-archive-final-torrent/
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+git clone https://github.com/jonsjava/char-archive-small_frontend.git
 cd char-archive-small_frontend
 ./setup.sh
 ```
@@ -57,7 +57,7 @@ When prompted, enter your **character-archive-final-torrent** folder (the one co
 ### Windows
 
 ```powershell
-git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+git clone https://github.com/jonsjava/char-archive-small_frontend.git
 cd char-archive-small_frontend
 .\setup.ps1
 ```
