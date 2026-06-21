@@ -217,16 +217,20 @@ docker compose logs -f importer
 
 ## Importing cards
 
-See **[Import Guide](docs/import-guide.md)** for step-by-step instructions (Docker and local dev, Linux and Windows).
+See **[Import Guide](docs/import-guide.md)** for the full walkthrough (without Docker and with Docker, Linux and Windows).
 
-Summary: drop `.png` or `.json` character cards into `import/`. Scanning runs automatically:
+| Mode | How imports run | UI |
+|------|-----------------|-----|
+| **Without Docker** | Automatic via `runme.sh` / `runme.ps1` | http://localhost:5000 |
+| **With Docker** | `importer` service every 60s | http://localhost:8080 |
 
-| Mode | How imports run |
-|------|-----------------|
-| **Docker** | `importer` service scans every 60s |
-| **Local dev** | Built into `runme.sh` / `runme.ps1` when `ENABLE_IMPORT_SCANNER=true` |
+Drop `.png` or `.json` files into `import/`. Imported cards appear under **Generic**. Processed files move to `import/processed/`; failures go to `import/failed/` with a `.error.txt` log.
 
-Imported cards appear under the **Generic** source. Processed files move to `import/processed/`; failures go to `import/failed/` with a `.error.txt` log.
+**Without Docker (Linux / macOS):** `cd small_front && ./runme.sh`, then `cp my-card.png import/` — watch the runme terminal.
+
+**Without Docker (Windows):** `cd small_front; .\runme.ps1`, then `Copy-Item my-card.png .\import\`.
+
+**With Docker:** `cp my-card.png import/` then `docker compose logs -f importer`.
 
 ## API Usage
 

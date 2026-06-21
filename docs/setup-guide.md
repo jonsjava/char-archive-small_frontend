@@ -121,9 +121,31 @@ To connect pgAdmin to Postgres: host `postgres`, port `5432`, database `char_arc
 
 ## Adding your own cards
 
-See **[Import Guide](import-guide.md)** for full instructions (Docker vs local dev, Linux vs Windows).
+See **[Import Guide](import-guide.md)** for the full walkthrough.
 
-Quick start — copy a card into `import/` at the repo root:
+### Without Docker
+
+Start the app, then drop files into `import/`:
+
+**Linux / macOS:**
+
+```bash
+cd small_front && ./runme.sh
+# in another terminal, from repo root:
+cp ~/Downloads/new-character.png import/
+```
+
+**Windows (PowerShell):**
+
+```powershell
+cd small_front; .\runme.ps1
+# in another window, from repo root:
+Copy-Item "$env:USERPROFILE\Downloads\new-character.png" -Destination ".\import\"
+```
+
+Watch the **runme terminal** for `Import new-character.png: ok`. Open http://localhost:5000 and filter **Source → Generic**.
+
+### With Docker
 
 **Linux / macOS:**
 
@@ -139,7 +161,7 @@ Copy-Item "$env:USERPROFILE\Downloads\new-character.png" -Destination ".\import\
 docker compose logs -f importer
 ```
 
-The importer service checks every `IMPORT_SCAN_INTERVAL` seconds (default 60) and adds cards to the **Generic** source.
+Open http://localhost:8080 and filter **Source → Generic**.
 
 ## Common commands
 
