@@ -1,0 +1,33 @@
+# Secrets and local config
+.env
+.env.local
+!.env.example
+small_front/.env
+!small_front/.env.example
+
+# Local dev scripts (copy from *.example.sh)
+small_front/rebuild_tags.sh
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Database and archive data
+db_data/
+*.dump
+archive/
+
+# Docker local overrides
+docker-compose.override.yml
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Accidental nested template copy
+small_front/templates/templates/

@@ -133,25 +133,7 @@ Images are stored in `archive/hashed-data/` using MD5 hash sharding:
 
 ## Docker Configuration
 
-The frontend runs as a Docker container:
-
-```yaml
-frontend:
-  build:
-    context: ./small_front
-    dockerfile: Dockerfile
-  environment:
-    DB_HOST: postgres
-    DB_PORT: "5432"
-    DB_NAME: char_archive
-    DB_USER: char_archive
-    DB_PASSWORD: <password>
-    ARCHIVE_PATH: /archive
-  volumes:
-    - ./archive:/archive:ro
-  ports:
-    - "100.108.69.91:8080:5000"
-```
+The frontend is defined in `docker-compose.yml` (build context `./small_front`). Credentials and bind addresses come from the root `.env` file (see `.env.example`). Image paths use `IMAGE_LAYOUT=sharded` and `IMAGE_SUBDIR=hashed-data` so files under `archive/hashed-data/` resolve correctly inside the container.
 
 ## Development
 

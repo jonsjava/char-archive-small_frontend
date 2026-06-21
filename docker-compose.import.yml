@@ -1,44 +1,14 @@
+# Merge with the base compose file for first-time setup (restores database.dump on empty data dir).
+#
+#   cp .env.example .env && nano .env
+#   docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+#
+# After import completes, use the base file only:
+#   docker compose up -d
+
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: char_archive_db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: char_archive
-      POSTGRES_PASSWORD: CharArch1ve_Db_2026!
-      POSTGRES_DB: char_archive
     volumes:
       - ./db_data/postgres:/var/lib/postgresql/data
       - ./database.dump:/docker-entrypoint-initdb.d/database.dump:ro
       - ./init-db.sh:/docker-entrypoint-initdb.d/zz-init-db.sh:ro
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U char_archive -d char_archive"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - char_archive_network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: char_archive_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@chararchive.dev
-      PGADMIN_DEFAULT_PASSWORD: PgAdm1n_2026!Secure
-      PGADMIN_CONFIG_SERVER_MODE: "True"
-    volumes:
-      - ./db_data/pgadmin:/var/lib/pgadmin
-    ports:
-      - "5050:80"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - char_archive_network
-
-networks:
-  char_archive_network:
-    driver: bridge

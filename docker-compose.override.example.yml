@@ -1,0 +1,11 @@
+# Reference only — setup.sh / setup.ps1 generate docker-compose.override.yml with your paths.
+# Compose merges this with docker-compose.yml automatically (override is gitignored).
+
+services:
+  frontend:
+    volumes:
+      - /absolute/path/to/torrent/archive:/archive:ro
+  postgres:
+    volumes:
+      - /absolute/path/to/torrent/database.dump:/docker-entrypoint-initdb.d/database.dump:ro
+      - ./init-db.sh:/docker-entrypoint-initdb.d/zz-init-db.sh:ro
