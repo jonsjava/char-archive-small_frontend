@@ -46,42 +46,49 @@ Single-page application using:
 
 ## Prerequisites
 
-- Docker Engine (20.10+)
-- Docker Compose (v2.0+)
-- PostgreSQL database with Character Archive data
-- Image archive on disk (see [Image storage](#image-storage); Character Archive torrent uses **sharded** layout under `hashed-data/`)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Compose v2 (Linux)
+- Character Archive torrent downloaded and extracted (see [Setup Guide](docs/setup-guide.md))
 
 ## Quick Start
 
-### 1. Set Up Environment Variables
+### 1. Get the torrent data
 
-From the repository root:
+Download the Character Archive torrent. Your folder should look like:
 
-```bash
-cp .env.example .env
-# Edit passwords, BIND_HOST (e.g. Tailscale IP), and ports
+```
+<torrent-download-dir>/
+  database.dump
+  archive.7z.001 … archive.7z.020
+  archive/hashed-data/    ← after extracting archive.7z.*
 ```
 
-Compose mounts `./archive` at `/archive` and sets image path variables for the **sharded** layout by default (`IMAGE_LAYOUT=sharded`, `IMAGE_SUBDIR=hashed-data` in root `.env.example`). Change these if your files use a different layout (see [Image storage](#image-storage)).
+Extract all `archive.7z.*` parts with [7-Zip](https://www.7-zip.org/) before continuing.
 
-### 2. Run with Docker Compose
+### 2. Run setup
 
-First-time import (empty `db_data/postgres`):
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
-docker compose logs -f postgres   # wait for restore to finish
-```
-
-Normal operation (database already imported):
+**Linux / macOS:**
 
 ```bash
-docker compose up -d
+git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+cd char-archive-small_frontend
+./setup.sh
 ```
 
-### 3. Access the Frontend
+**Windows (PowerShell):**
 
-Open your browser at `http://<BIND_HOST or localhost>:8080` (or the port you set in `FRONTEND_PORT`).
+```powershell
+git clone https://github.com/sproutingnerd/char-archive-small_frontend.git
+cd char-archive-small_frontend
+.\setup.ps1
+```
+
+Enter your torrent download directory when prompted. Setup mounts your archive and database in place — no need to copy files into the repo.
+
+### 3. Open the frontend
+
+Go to **http://localhost:8080** when setup finishes. Login credentials for pgAdmin and Postgres are in `.env`.
+
+For manual configuration, flags, and troubleshooting, see the [Setup Guide](docs/setup-guide.md).
 
 ## Development
 
@@ -105,9 +112,9 @@ export DB_PORT=5432
 export DB_NAME=char_archive
 export DB_USER=char_archive
 export DB_PASSWORD=your_password
-export ARCHIVE_PATH=/path/to/archive          # parent of image files
-export IMAGE_LAYOUT=sharded                   # flat | sharded — see Image storage
-export IMAGE_SUBDIR=hashed-data               # optional subfolder under ARCHIVE_PATH
+export ARCHIVE_PATH=/path/to/torrent/archive   # contains hashed-data/
+export IMAGE_LAYOUT=sharded
+export IMAGE_SUBDIR=hashed-data
 ```
 
 4. Run the Flask app:
@@ -272,10 +279,10 @@ Use flat when your archive stores `{ARCHIVE_PATH}/{hash}` files. Use sharded whe
 - Test database directly: `docker compose exec postgres psql -U char_archive -d char_archive`
 
 ### Images not loading
-- Verify archive volume is mounted correctly (`ARCHIVE_PATH` inside the container should match your host tree)
-- Confirm `IMAGE_LAYOUT` and `IMAGE_SUBDIR` match how files are actually stored (wrong layout looks like “missing” images)
-- Check the file exists at the resolved path for a known `image_hash` (sharded vs flat examples above)
-- Verify file permissions on the archive folder
+- Confirm setup pointed at the correct torrent folder (`TORRENT_DIR` in `.env`)
+- Verify `archive/hashed-data/` exists on the host
+- Check `IMAGE_LAYOUT=sharded` and `IMAGE_SUBDIR=hashed-data` in `.env`
+- Check file permissions on the archive folder
 
 ### Container keeps restarting
 - Check logs: `docker compose logs frontend`
@@ -292,31 +299,31 @@ Use flat when your archive stores `{ARCHIVE_PATH}/{hash}` files. Use sharded whe
 ```
 char-archive-small_frontend/
 ├── README.md                      # This file
-├── .env.example                   # Docker Compose env template (copy to .env)
+├── setup.sh                       # One-shot setup (Linux / macOS)
+├── setup.ps1                      # One-shot setup (Windows)
+├── .env.example                   # Docker Compose env template
 ├── .gitignore
-├── char-archive_final.torrent     # Torrent for full archive + database dump
 ├── docker-compose.yml             # Stack: postgres, pgadmin, frontend
-├── docker-compose.import.yml      # DB import overlay (merge with base compose)
+├── docker-compose.import.yml      # DB import overlay (manual/advanced)
+├── docker-compose.override.example.yml
 ├── init-db.sh                     # Restores database.dump on empty Postgres data dir
-├── database.dump                  # PostgreSQL custom-format dump (local; gitignored; for import)
-├── archive/                       # Image files (local; gitignored — mount into frontend)
 ├── db_data/                       # Postgres + pgAdmin persistence (local; gitignored)
 ├── docs/
+│   ├── setup-guide.md             # Install guide (start here)
 │   ├── MIGRATION.md               # Server migration guide
-│   ├── setup-guide.md             # Complete Docker setup
 │   ├── frontend-guide.md          # API and architecture details
 │   ├── DATABASE_STRUCTURE.md      # Full database schema
-│   └── FILE_STRUCTURE.md          # Image storage layout (sharded paths)
+│   └── FILE_STRUCTURE.md          # Image storage layout
 └── small_front/                   # Frontend application
-    ├── .env.example               # Local dev env (copy to .env; IMAGE_LAYOUT, etc.)
+    ├── .env.example               # Local dev env
     ├── app.py                     # Flask API backend
     ├── Dockerfile                 # Container image for Compose frontend service
     ├── requirements.txt           # Python dependencies
     ├── rebuild_tag_index.py       # Rebuild tag search index in PostgreSQL
-    ├── rebuild_tags.example.sh    # Example wrapper; copy to rebuild_tags.sh (gitignored)
-    ├── runme.sh                   # Local dev launcher (gitignored; sources .env, runs app.py)
+    ├── rebuild_tags.example.sh    # Example wrapper; copy to rebuild_tags.sh
+    ├── runme.sh                   # Local dev launcher
     ├── sql/
-    │   └── tag_index.sql          # Tag index DDL used by rebuild_tag_index.py
+    │   └── tag_index.sql          # Tag index DDL
     └── templates/
         └── index.html             # Tailwind CSS frontend
 ```

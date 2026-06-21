@@ -6,7 +6,6 @@ small_front/.env
 !small_front/.env.example
 
 # Local dev scripts (copy from *.example.sh)
-small_front/runme.sh
 small_front/rebuild_tags.sh
 
 # Python

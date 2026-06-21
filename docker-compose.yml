@@ -1,5 +1,6 @@
-# Production stack. Copy .env.example to .env and set BIND_HOST (e.g. Tailscale IP) and passwords.
-# First-time DB import: docker compose -f docker-compose.yml -f docker-compose.import.yml up -d
+# Production stack. Easiest path: ./setup.sh (or setup.ps1 on Windows).
+# Manual: copy .env.example to .env, set TORRENT_DIR / paths, docker compose up -d.
+# First-time DB import without setup script: merge docker-compose.import.yml.
 
 x-postgres-env: &postgres-env
   POSTGRES_USER: ${POSTGRES_USER:-char_archive}
@@ -67,7 +68,7 @@ services:
     environment:
       <<: *frontend-env
     volumes:
-      - ./archive:/archive:ro
+      - ${ARCHIVE_HOST_PATH:-./archive}:/archive:ro
     ports:
       - target: 5000
         published: ${FRONTEND_PORT:-8080}
