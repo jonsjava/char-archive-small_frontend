@@ -4,6 +4,8 @@ A Flask-based web application for searching and downloading character cards from
 
 > **Not for production.** This is a personal, local archive browser. It has no authentication, hardening, rate limiting, or operational safeguards. Do not expose it to the public internet or use it as a hosted service.
 
+READ THE README. If you run into an issue due to lack of reading the actual document written to help you, I will close the issue.
+
 ![Python](https://img.shields.io/badge/python-3.11-blue.svg)
 ![Flask](https://img.shields.io/badge/flask-3.1-green.svg)
 
