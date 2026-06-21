@@ -47,22 +47,35 @@ Single-page application using:
 ## Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Compose v2 (Linux)
-- Character Archive torrent downloaded and extracted (see [Setup Guide](docs/setup-guide.md))
+- Character Archive torrent downloaded (~200 GiB; see [Setup Guide](docs/setup-guide.md))
 
 ## Quick Start
 
 ### 1. Get the torrent data
 
-Download the Character Archive torrent. Your folder should look like:
+Download the **character-archive-final-torrent** folder. After the download completes it looks like:
 
 ```
-<torrent-download-dir>/
+character-archive-final-torrent/
+  README.md
+  database.dump                 # ~11 GB — used by setup
+  archive.7z.001 … archive.7z.020   # ~190 GB split archive — extract with 7-Zip
+  char-archive-server.zip         # original server code (not needed for this frontend)
+  char-archive-scraper.zip        # original scraper code (not needed for this frontend)
+```
+
+Extract `archive.7z.001` with [7-Zip](https://www.7-zip.org/) (it picks up all `.002`–`.020` parts automatically). That creates:
+
+```
+character-archive-final-torrent/
   database.dump
-  archive.7z.001 … archive.7z.020
-  archive/hashed-data/    ← after extracting archive.7z.*
+  archive/
+    hashed-data/                  # character images — required
+    files/                        # not needed for search UI
+    webring/
 ```
 
-Extract all `archive.7z.*` parts with [7-Zip](https://www.7-zip.org/) before continuing.
+You need **~200 GiB** for the download plus **~200 GiB** free for extraction. Plan for **~400 GiB** total on disk.
 
 ### 2. Run setup
 

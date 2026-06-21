@@ -7,24 +7,40 @@ This guide covers installing the Character Archive search frontend using the off
 | Requirement | Notes |
 |-------------|-------|
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Compose v2 (Linux) | |
-| ~70GB free disk space | ~20GB database after import + torrent archive on disk |
-| Character Archive torrent | Download and extract before setup |
+| ~400 GiB free disk space | ~200 GiB torrent download + ~200 GiB for extracted `archive/` |
+| Character Archive torrent | Download, then extract `archive.7z.001` before setup |
 
 ## Torrent layout
 
-Everything lives in one download folder:
+The torrent downloads as a single folder (**character-archive-final-torrent**, ~201 GiB):
 
 ```
-<torrent-download-dir>/
-  database.dump              # PostgreSQL dump (~11GB) — at torrent root
-  archive.7z.001 … .020      # extract these with 7-Zip
-  archive/                   # created by extraction
-    hashed-data/             # character images (required)
-    files/                   # raw files (not needed for search UI)
+character-archive-final-torrent/
+  README.md                       # notes from the archive maintainers
+  database.dump                   # PostgreSQL dump (~11 GB)
+  archive.7z.001                  # 10 GB each (parts 001–019)
+  archive.7z.002
+  …
+  archive.7z.019
+  archive.7z.020                  # ~586 MB (last part)
+  char-archive-server.zip         # original server source (optional)
+  char-archive-scraper.zip        # original scraper source (optional)
+```
+
+**For this frontend you only need `database.dump` and the extracted `archive/` folder.** The zip files are reference material from the original project.
+
+Extract `archive.7z.001` with [7-Zip](https://www.7-zip.org/). Right-click → "Extract Here" on Windows, or `7z x archive.7z.001` on Linux/macOS. All 20 parts are used automatically.
+
+After extraction:
+
+```
+character-archive-final-torrent/
+  database.dump
+  archive/
+    hashed-data/                  # character images (required)
+    files/                        # raw files (not needed for search UI)
     webring/
 ```
-
-Extract all `archive.7z.*` parts with [7-Zip](https://www.7-zip.org/) before running setup. You should end up with `archive/hashed-data/` alongside `database.dump`.
 
 ## Quick start (recommended)
 
@@ -36,7 +52,7 @@ cd char-archive-small_frontend
 ./setup.sh
 ```
 
-When prompted, enter your torrent download directory (the folder containing `database.dump` and `archive/`).
+When prompted, enter your **character-archive-final-torrent** folder (the one containing `database.dump` and, after extraction, `archive/`).
 
 ### Windows
 
