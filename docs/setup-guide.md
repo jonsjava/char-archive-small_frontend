@@ -121,14 +121,25 @@ To connect pgAdmin to Postgres: host `postgres`, port `5432`, database `char_arc
 
 ## Adding your own cards
 
-Copy PNG or JSON character cards into the `import/` folder at the repo root:
+See **[Import Guide](import-guide.md)** for full instructions (Docker vs local dev, Linux vs Windows).
+
+Quick start — copy a card into `import/` at the repo root:
+
+**Linux / macOS:**
 
 ```bash
 cp ~/Downloads/new-character.png import/
 docker compose logs -f importer
 ```
 
-The importer runs as a Docker service, checks for new files every `IMPORT_SCAN_INTERVAL` seconds (default 60), and adds them to the **Generic** source. Processed files move to `import/processed/`; failures go to `import/failed/` with a `.error.txt` explanation.
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item "$env:USERPROFILE\Downloads\new-character.png" -Destination ".\import\"
+docker compose logs -f importer
+```
+
+The importer service checks every `IMPORT_SCAN_INTERVAL` seconds (default 60) and adds cards to the **Generic** source.
 
 ## Common commands
 
@@ -277,21 +288,7 @@ cd small_front
 .\rebuild_tags.ps1
 ```
 
-To import new cards without Docker, drop files into `import/` while the app is running via `runme.sh` / `runme.ps1` — scanning is enabled by default (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`).
-
-To run the watcher without the Flask app:
-
-```bash
-# Linux/macOS
-python import_watcher.py
-```
-
-```powershell
-# Windows
-.\import_watcher.ps1
-```
-
-Set `IMPORT_DIR=../import` in `small_front/.env` (default in `.env.example`).
+To import new cards without Docker, see **[Import Guide](import-guide.md)** (local dev section). Scanning runs automatically when you use `runme.sh` / `runme.ps1`.
 
 ### Script reference (local dev)
 
@@ -305,6 +302,7 @@ Set `IMPORT_DIR=../import` in `small_front/.env` (default in `.env.example`).
 
 ## Related docs
 
+- [Import Guide](import-guide.md) — adding your own character cards
 - [README.md](../README.md) — features and API
 - [frontend-guide.md](frontend-guide.md) — architecture
 - [MIGRATION.md](MIGRATION.md) — moving to another server

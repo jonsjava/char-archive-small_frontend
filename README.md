@@ -16,7 +16,7 @@ A Flask-based web application for searching and downloading character cards from
 - **Shareable URLs** — search filters and pagination are reflected in the address bar
 - **Direct character links** at `/character/<source>/<id>` (opens the detail modal)
 - **Full card details** in the detail modal — all text fields and raw JSON, without truncation
-- **Import folder** — drop PNG or JSON character cards into `import/`; a background watcher adds them to the archive
+- **Import folder** — drop PNG or JSON character cards into `import/`; see [Import Guide](docs/import-guide.md)
 - **Card downloads** as PNG (embedded character data) or raw JSON
 - **Source filtering** per platform; optional **browse-all** mode when `ENABLE_BROWSE_ALL` is enabled
 - **Archive stats** with per-source counts on the home page
@@ -184,23 +184,7 @@ cp rebuild_tags.example.sh rebuild_tags.sh && chmod +x rebuild_tags.sh
 .\rebuild_tags.ps1
 ```
 
-Watch the `import/` folder for new cards — when running locally via `runme.sh` / `runme.ps1`, the import scanner starts automatically (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`). Drop files into `import/` while the app is running:
-
-```bash
-cp my-character.png import/
-```
-
-To run the watcher standalone (without the Flask app):
-
-```bash
-# Linux/macOS
-python import_watcher.py
-```
-
-```powershell
-# Windows
-.\import_watcher.ps1
-```
+Card imports run automatically while the app is up — see [Import Guide](docs/import-guide.md).
 
 See [Setup Guide — Local development](docs/setup-guide.md#local-development-without-docker) for more detail.
 
@@ -233,27 +217,16 @@ docker compose logs -f importer
 
 ## Importing cards
 
-Drop character card files into the `import/` folder at the repo root.
+See **[Import Guide](docs/import-guide.md)** for step-by-step instructions (Docker and local dev, Linux and Windows).
+
+Summary: drop `.png` or `.json` character cards into `import/`. Scanning runs automatically:
 
 | Mode | How imports run |
 |------|-----------------|
-| **Docker** | `importer` service scans every 60s (`IMPORT_SCAN_INTERVAL` in root `.env`) |
-| **Local dev** | Automatic when using `runme.sh` / `runme.ps1` (`ENABLE_IMPORT_SCANNER=true` in `small_front/.env`) |
+| **Docker** | `importer` service scans every 60s |
+| **Local dev** | Built into `runme.sh` / `runme.ps1` when `ENABLE_IMPORT_SCANNER=true` |
 
-| Accepted | Notes |
-|----------|-------|
-| `.png` | Tavern/SillyTavern cards with embedded `chara` or `ccv3` data |
-| `.json` | Character definition JSON |
-
-Imported cards are added to the **Generic** source. After processing, files move to `import/processed/` (or `import/failed/` with an error log on failure).
-
-```bash
-cp my-character.png import/
-# Local: watch the runme terminal for "Import my-character.png: ok"
-# Docker: docker compose logs -f importer
-```
-
-Set `ENABLE_IMPORT_SCANNER=false` in `small_front/.env` to disable local scanning.
+Imported cards appear under the **Generic** source. Processed files move to `import/processed/`; failures go to `import/failed/` with a `.error.txt` log.
 
 ## API Usage
 
@@ -430,6 +403,7 @@ char-archive-small_frontend/
 ├── db_data/                       # Postgres + pgAdmin persistence (local; gitignored)
 ├── docs/
 │   ├── setup-guide.md             # Install guide (start here)
+│   ├── import-guide.md            # Adding your own character cards
 │   ├── MIGRATION.md               # Server migration guide
 │   ├── frontend-guide.md          # API and architecture details
 │   ├── DATABASE_STRUCTURE.md      # Full database schema
@@ -465,6 +439,7 @@ See `requirements.txt` for complete list.
 ## Related Documentation
 
 - [Full Setup Guide](docs/setup-guide.md) - Complete Docker setup instructions
+- [Import Guide](docs/import-guide.md) - Adding your own character cards
 - [Frontend Architecture](docs/frontend-guide.md) - Detailed API and schema documentation
 - [Database Structure](docs/DATABASE_STRUCTURE.md) - Complete database schema reference
 - [File Structure](docs/FILE_STRUCTURE.md) - Image storage and file organization
