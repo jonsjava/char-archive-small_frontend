@@ -331,12 +331,13 @@ docker compose stop importer
 - Run `docker compose logs importer`.
 - Wait up to one scan interval.
 
-### File moved to `import/failed/`
+### File moved to `import/failed/` (or `.error.txt` appears)
 
-Read the matching `.error.txt` in the same folder.
+Read the matching `.error.txt` in the same folder (or next to the file in `import/` if permissions prevented moving).
 
 | Error | Fix |
 |-------|-----|
+| `Permission denied` on `import/failed/` or `import/processed/` | Docker often creates these folders as **root**. When running locally, fix ownership: `sudo chown -R "$USER:$USER" import/processed import/failed` (Linux/macOS). Then retry. |
 | `No chara/ccv3 data found in PNG` | Plain image, not a Tavern character card PNG |
 | `Not a PNG file` | Wrong format or corrupted file |
 | Database connection error | Postgres not running, or wrong `DB_*` values in `small_front/.env` (local) / `.env` (Docker) |

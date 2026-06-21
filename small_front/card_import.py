@@ -23,9 +23,97 @@ DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
 ARCHIVE_PATH = Path(os.environ.get('ARCHIVE_PATH', '/archive'))
 IMAGE_SUBDIR = os.environ.get('IMAGE_SUBDIR', '').strip().strip('/')
 IMAGE_LAYOUT = os.environ.get('IMAGE_LAYOUT', 'sharded').lower()
-IMPORT_DIR = Path(os.environ.get('IMPORT_DIR', '/import'))
+IMPORT_DIR = Path(os.environ.get('IMPORT_DIR', '/import')).expanduser().resolve()
 
 CARD_EXTENSIONS = {'.png', '.json'}
+_import_dir_warned = False
+
+
+def _warn_import_dir_permissions(import_dir, subdir):
+    global _import_dir_warned
+    if _import_dir_warned:
+        return
+    _import_dir_warned = True
+    print(
+        f"Warning: {subdir} is not writable (often because Docker created it as root).\n"
+        f"  Local imports will use fallback paths until fixed.\n"
+        f"  Fix: sudo chown -R \"$USER:$USER\" {import_dir}",
+        flush=True,
+    )
+
+
+def _pick_writable_dir(import_dir, subname):
+    """Return subdir under import_dir if writable, else import_dir itself."""
+    sub = import_dir / subname
+    sub.mkdir(parents=True, exist_ok=True)
+    if os.access(sub, os.W_OK):
+        return sub
+    _warn_import_dir_permissions(import_dir, sub)
+    return import_dir
+
+
+def _unique_dest(dest_dir, path, suffix=''):
+    dest = dest_dir / path.name
+    if dest.exists():
+        tag = suffix or str(path.stat().st_mtime_ns)
+        dest = dest_dir / f'{path.stem}_{tag}{path.suffix}'
+    return dest
+
+
+def _relocate_file(path, dest_dir, unique_suffix=''):
+    """Move an import file into dest_dir. Raises PermissionError if not writable."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = _unique_dest(dest_dir, path, unique_suffix)
+    shutil.move(str(path), str(dest))
+    return dest
+
+
+def _write_error_file(dest_path, import_dir, message):
+    """Write a .error.txt file next to dest_path, or in import_dir as fallback."""
+    err_file = dest_path.with_suffix(dest_path.suffix + '.error.txt')
+    try:
+        err_file.write_text(message, encoding='utf-8')
+        return err_file
+    except PermissionError:
+        fallback = import_dir / f'{dest_path.name}.error.txt'
+        fallback.write_text(message, encoding='utf-8')
+        return fallback
+
+
+def _handle_success(path, import_dir, processed_dir, c_hash, inserted):
+    unique = c_hash[:8] if c_hash else ''
+    for dest_dir in (processed_dir, import_dir):
+        try:
+            dest = _relocate_file(path, dest_dir, unique)
+            status = 'imported' if inserted else 'duplicate'
+            print(f"Import {path.name}: {'ok' if inserted else 'duplicate'} ({c_hash})", flush=True)
+            if dest_dir == import_dir and dest_dir != processed_dir:
+                print(f"  (moved to {dest}; fix permissions on {processed_dir} to use processed/)", flush=True)
+            return {'file': path.name, 'status': status, 'card_data_hash': c_hash}
+        except PermissionError:
+            continue
+    err = f"import succeeded but could not move file out of {import_dir}"
+    _write_error_file(path, import_dir, err)
+    print(f"Import {path.name}: ok ({c_hash}) but file not moved — fix permissions on {processed_dir}", flush=True)
+    return {'file': path.name, 'status': 'imported' if inserted else 'duplicate', 'card_data_hash': c_hash}
+
+
+def _handle_failure(path, import_dir, failed_dir, exc):
+    message = str(exc)
+    for dest_dir in (failed_dir, import_dir):
+        try:
+            dest = _relocate_file(path, dest_dir, str(path.stat().st_mtime_ns))
+            _write_error_file(dest, import_dir, message)
+            print(f"Import {path.name}: failed — {message}", flush=True)
+            if dest_dir == import_dir and dest_dir != failed_dir:
+                print(f"  (moved to {dest}; fix permissions on {failed_dir} to use failed/)", flush=True)
+            return {'file': path.name, 'status': 'failed', 'error': message}
+        except PermissionError:
+            continue
+    _write_error_file(path, import_dir, message)
+    print(f"Import {path.name}: failed — {message}", flush=True)
+    print(f"  (file left in place; fix permissions: sudo chown -R \"$USER:$USER\" {import_dir})", flush=True)
+    return {'file': path.name, 'status': 'failed', 'error': message}
 
 
 def image_root():
@@ -187,16 +275,22 @@ def import_file(path):
 def scan_import_dir():
     """Process all pending files in IMPORT_DIR. Returns list of result dicts."""
     import_dir = IMPORT_DIR
-    processed_dir = import_dir / 'processed'
-    failed_dir = import_dir / 'failed'
+    if not import_dir.is_dir():
+        print(f"Import scan skipped — directory not found: {import_dir}", flush=True)
+        return []
+
+    processed_dir = _pick_writable_dir(import_dir, 'processed')
+    failed_dir = _pick_writable_dir(import_dir, 'failed')
     lock_file = import_dir / '.scan.lock'
 
-    for sub in (import_dir, processed_dir, failed_dir):
-        sub.mkdir(parents=True, exist_ok=True)
+    import_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         fd = os.open(lock_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
+        return []
+    except PermissionError as exc:
+        print(f"Import scan skipped — cannot write lock file in {import_dir}: {exc}", flush=True)
         return []
 
     results = []
@@ -206,30 +300,14 @@ def scan_import_dir():
                 continue
             if path.suffix.lower() not in CARD_EXTENSIONS:
                 continue
-            if path.name == '.scan.lock':
+            if path.name == '.scan.lock' or path.name.endswith('.error.txt'):
                 continue
 
             try:
                 c_hash, inserted = import_file(path)
-                dest = processed_dir / path.name
-                if dest.exists():
-                    dest = processed_dir / f'{path.stem}_{c_hash[:8]}{path.suffix}'
-                shutil.move(str(path), str(dest))
-                results.append({
-                    'file': path.name,
-                    'status': 'imported' if inserted else 'duplicate',
-                    'card_data_hash': c_hash,
-                })
-                print(f"Import {path.name}: {'ok' if inserted else 'duplicate'} ({c_hash})", flush=True)
+                results.append(_handle_success(path, import_dir, processed_dir, c_hash, inserted))
             except Exception as exc:
-                dest = failed_dir / path.name
-                if dest.exists():
-                    dest = failed_dir / f'{path.stem}_{path.stat().st_mtime_ns}{path.suffix}'
-                shutil.move(str(path), str(dest))
-                err_file = dest.with_suffix(dest.suffix + '.error.txt')
-                err_file.write_text(str(exc), encoding='utf-8')
-                results.append({'file': path.name, 'status': 'failed', 'error': str(exc)})
-                print(f"Import {path.name}: failed — {exc}", flush=True)
+                results.append(_handle_failure(path, import_dir, failed_dir, exc))
     finally:
         os.close(fd)
         lock_file.unlink(missing_ok=True)
