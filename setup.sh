@@ -215,7 +215,7 @@ print_success() {
 
 main() {
   check_docker
-  mkdir -p db_data/postgres db_data/pgadmin
+  mkdir -p db_data/postgres db_data/pgadmin import/processed import/failed
 
   if [[ -z "$TORRENT_DIR" ]]; then
     prompt_torrent_dir

@@ -416,7 +416,7 @@
     <div id="modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen px-4 py-8 text-center">
             <div class="fixed inset-0 bg-black/80 backdrop-blur-sm overlay-enter" id="modalOverlay"></div>
-            <div class="relative bg-dark-card rounded-2xl overflow-hidden shadow-2xl transform sm:max-w-3xl sm:w-full border border-dark-border/50 modal-enter">
+            <div class="relative bg-dark-card rounded-2xl overflow-hidden shadow-2xl transform sm:max-w-5xl sm:w-full max-h-[90vh] flex flex-col border border-dark-border/50 modal-enter">
                 <!-- Close button -->
                 <div class="absolute top-4 right-4 z-10">
                     <button id="closeModal" class="bg-dark-bg/90 hover:bg-dark-hover rounded-full p-2.5 text-gray-400 hover:text-white transition-all duration-300 border border-dark-border/50 hover:border-purple-500/30">
@@ -425,7 +425,7 @@
                         </svg>
                     </button>
                 </div>
-                <div id="modalContent" class="p-6 sm:p-8">
+                <div id="modalContent" class="p-6 sm:p-8 overflow-y-auto modal-scroll flex-1">
                     <!-- Content loaded dynamically -->
                 </div>
             </div>
@@ -797,7 +797,6 @@
         function renderModalTags(tags) {
             if (!tags.length) return '';
 
-            const limit = 10;
             const normalized = tags.map(t => String(t).trim()).filter(Boolean);
             const renderTagBtn = (tag) => `
                 <a href="${buildTagFilterUrl(tag)}"
@@ -805,21 +804,92 @@
                    data-tag="${escapeAttr(tag)}"
                    title="Filter by tag: ${escapeHtml(tag)}">${escapeHtml(tag)}</a>`;
 
-            const visible = normalized.slice(0, limit).map(renderTagBtn).join('');
-            const hidden = normalized.slice(limit);
-            const hiddenHtml = hidden.length
-                ? `<span class="tag-extra hidden flex flex-wrap gap-1.5">${hidden.map(renderTagBtn).join('')}</span>`
-                : '';
-            const expandBtn = hidden.length
-                ? `<button type="button" class="tag-expand text-xs text-purple-400 hover:text-purple-300 px-2 py-1">+${hidden.length} more</button>`
-                : '';
-
             return `
                 <div class="mb-5">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-2">Tags</h3>
                     <div class="tag-list flex flex-wrap gap-1.5 items-center">
-                        ${visible}${expandBtn}${hiddenHtml}
+                        ${normalized.map(renderTagBtn).join('')}
                     </div>
                 </div>
+            `;
+        }
+
+        const DETAIL_FIELD_LABELS = [
+            ['description', 'Description'],
+            ['char_persona', 'Character Persona'],
+            ['personality', 'Personality'],
+            ['scenario', 'Scenario'],
+            ['first_mes', 'First Message'],
+            ['mes_example', 'Message Example'],
+            ['system_prompt', 'System Prompt'],
+            ['post_history_instructions', 'Post-History Instructions'],
+            ['creator_notes', 'Creator Notes'],
+            ['creatorcomment', 'Creator Comment'],
+        ];
+
+        function formatDetailValue(value) {
+            if (value == null) return '';
+            if (Array.isArray(value)) {
+                return value.map(v => String(v)).join('\n\n---\n\n');
+            }
+            if (typeof value === 'object') {
+                return JSON.stringify(value, null, 2);
+            }
+            return String(value);
+        }
+
+        function renderDetailSection(label, value) {
+            const text = formatDetailValue(value).trim();
+            if (!text) return '';
+            return `
+                <div class="mb-5">
+                    <h3 class="text-sm font-semibold text-gray-300 mb-2">${escapeHtml(label)}</h3>
+                    <div class="bg-dark-bg/50 rounded-xl p-4 border border-dark-border/30">
+                        <p class="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">${escapeHtml(text)}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAllDetailSections(definition, defData) {
+            const seen = new Set();
+            let html = '';
+
+            for (const [key, label] of DETAIL_FIELD_LABELS) {
+                const value = defData[key] ?? definition[key];
+                if (value == null || value === '') continue;
+                seen.add(key);
+                html += renderDetailSection(label, value);
+            }
+
+            if (Array.isArray(defData.alternate_greetings) && defData.alternate_greetings.length) {
+                html += renderDetailSection('Alternate Greetings', defData.alternate_greetings);
+                seen.add('alternate_greetings');
+            }
+
+            // Any other string fields in data not already shown
+            for (const [key, value] of Object.entries(defData)) {
+                if (seen.has(key) || key === 'tags' || key === 'name' || key === 'char_name') continue;
+                if (typeof value === 'string' && value.trim()) {
+                    const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    html += renderDetailSection(label, value);
+                }
+            }
+
+            return html;
+        }
+
+        function renderRawDefinition(definition) {
+            const json = JSON.stringify(definition, null, 2);
+            return `
+                <details class="mb-2 group">
+                    <summary class="text-sm font-semibold text-gray-300 cursor-pointer hover:text-purple-300 transition-colors">
+                        Full card definition (JSON)
+                    </summary>
+                    <div class="mt-2 bg-dark-bg/50 rounded-xl p-4 border border-dark-border/30">
+                        <pre class="text-xs text-gray-400 whitespace-pre-wrap break-words leading-relaxed modal-scroll">${escapeHtml(json)}</pre>
+                    </div>
+                </details>
             `;
         }
 
@@ -937,9 +1007,7 @@
 
                 const definition = char.definition || {};
                 const defData = definition.data || definition || {};
-                const description = defData.description || defData.char_persona || definition.description || '';
-                const firstMessage = defData.first_mes || '';
-                const tags = defData.tags || [];
+                const tags = defData.tags || definition.tags || [];
 
                 modalContent.innerHTML = `
                     <div class="flex flex-col sm:flex-row gap-6 sm:gap-8">
@@ -1010,35 +1078,9 @@
 
                             ${renderModalTags(tags)}
 
-                            <!-- Description -->
-                            ${description ? `
-                                <div class="mb-5">
-                                    <h3 class="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-                                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/>
-                                        </svg>
-                                        Description
-                                    </h3>
-                                    <div class="bg-dark-bg/50 rounded-xl p-4 border border-dark-border/30">
-                                        <p class="text-gray-300 text-sm max-h-40 overflow-y-auto whitespace-pre-wrap leading-relaxed modal-scroll">${escapeHtml(cleanCardText(description).substring(0, 1000))}${description.length > 1000 ? '...' : ''}</p>
-                                    </div>
-                                </div>
-                            ` : ''}
+                            ${renderAllDetailSections(definition, defData)}
 
-                            <!-- First Message -->
-                            ${firstMessage ? `
-                                <div class="mb-5">
-                                    <h3 class="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-                                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                                        </svg>
-                                        First Message
-                                    </h3>
-                                    <div class="bg-gradient-to-br from-purple-900/10 to-dark-bg/50 rounded-xl p-4 border border-purple-500/10">
-                                        <p class="text-gray-300 text-sm max-h-32 overflow-y-auto whitespace-pre-wrap leading-relaxed modal-scroll">${escapeHtml(firstMessage.substring(0, 500))}${firstMessage.length > 500 ? '...' : ''}</p>
-                                    </div>
-                                </div>
-                            ` : ''}
+                            ${renderRawDefinition(definition)}
                         </div>
                     </div>
                 `;

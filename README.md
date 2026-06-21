@@ -2,6 +2,8 @@
 
 A Flask-based web application for searching and downloading character cards from the Character Archive. Features a modern Tailwind CSS interface with full-text search, character previews, and card downloads.
 
+> **Not for production.** This is a personal, local archive browser. It has no authentication, hardening, rate limiting, or operational safeguards. Do not expose it to the public internet or use it as a hosted service.
+
 ![Python](https://img.shields.io/badge/python-3.11-blue.svg)
 ![Flask](https://img.shields.io/badge/flask-3.1-green.svg)
 
@@ -13,8 +15,8 @@ A Flask-based web application for searching and downloading character cards from
 - **Sort** by date added or name, ascending or descending
 - **Shareable URLs** — search filters and pagination are reflected in the address bar
 - **Direct character links** at `/character/<source>/<id>` (opens the detail modal)
-- **Character card previews** with lazy-loaded images (flat or sharded archive layouts via env config)
-- **Detail modal** with tags, description, first message, and expandable tag list
+- **Full card details** in the detail modal — all text fields and raw JSON, without truncation
+- **Import folder** — drop PNG or JSON character cards into `import/`; a background watcher adds them to the archive
 - **Card downloads** as PNG (embedded character data) or raw JSON
 - **Source filtering** per platform; optional **browse-all** mode when `ENABLE_BROWSE_ALL` is enabled
 - **Archive stats** with per-source counts on the home page
@@ -46,7 +48,7 @@ Single-page application using:
 
 ## Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Compose v2 (Linux)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) or Docker Engine + Compose v2 (Linux) — **or** Python 3.11+ and PostgreSQL 16 for [local setup](#running-without-docker)
 - Character Archive torrent downloaded (~200 GiB; see [Setup Guide](docs/setup-guide.md))
 
 ## Quick Start
@@ -103,50 +105,108 @@ Go to **http://localhost:8080** when setup finishes. Login credentials for pgAdm
 
 For manual configuration, flags, and troubleshooting, see the [Setup Guide](docs/setup-guide.md).
 
-## Development
+## Running without Docker
 
-### Local Development Setup
+You can run the frontend directly on your machine if you have **Python 3.11+**, **PostgreSQL**, and the torrent data on disk. Docker is optional.
 
-1. Clone the repository:
+### 1. PostgreSQL on your host
+
+Install [PostgreSQL 16](https://www.postgresql.org/download/) and create a database user and database:
+
 ```bash
-git clone https://github.com/jonsjava/char-archive-small_frontend.git
-cd char-archive-small_frontend/small_front
+createuser char_archive -P          # set a password when prompted
+createdb char_archive -O char_archive
 ```
 
-2. Install dependencies:
+Restore the dump from your torrent folder (first run only; can take 30+ minutes):
+
 ```bash
-pip install -r requirements.txt
+pg_restore -U char_archive -d char_archive /path/to/character-archive-final-torrent/database.dump
 ```
 
-3. Configure environment (copy `small_front/.env.example` to `small_front/.env`, or export variables):
+**Windows (PowerShell):** use the same commands if PostgreSQL's `bin` folder is on your PATH, or run `pg_restore` from pgAdmin's SQL tools.
+
+### 2. Configure the app
+
 ```bash
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=char_archive
-export DB_USER=char_archive
-export DB_PASSWORD=your_password
-export ARCHIVE_PATH=/path/to/torrent/archive   # contains hashed-data/
-export IMAGE_LAYOUT=sharded
-export IMAGE_SUBDIR=hashed-data
+cd small_front
+cp .env.example .env    # Windows: copy .env.example .env
 ```
 
-4. Run the Flask app:
+Edit `small_front/.env`:
+
+| Variable | Example |
+|----------|---------|
+| `DB_HOST` | `localhost` |
+| `DB_PASSWORD` | your postgres password |
+| `ARCHIVE_PATH` | `/path/to/character-archive-final-torrent/archive` |
+| `IMAGE_LAYOUT` | `sharded` |
+| `IMAGE_SUBDIR` | `hashed-data` |
+
+On Windows, use a full path for `ARCHIVE_PATH`, e.g. `C:\Downloads\character-archive-final-torrent\archive`.
+
+### 3. Start the app
+
+**Linux / macOS:**
+
 ```bash
 ./runme.sh
 ```
 
-`runme.sh` loads `.env`, creates/activates the virtualenv if needed, installs dependencies, then starts the app. Default URL: `http://localhost:5000` (set `PORT` in `.env` to change).
+**Windows (PowerShell):**
 
-### Rebuild After Changes
+```powershell
+.\runme.ps1
+```
+
+Both scripts create a Python virtualenv (if needed), install dependencies, load `.env`, and start Flask. Open **http://localhost:5000** (or the port set in `PORT`).
+
+### 4. Optional extras
+
+Rebuild the tag search index after restoring the database:
+
+```bash
+cp rebuild_tags.example.sh rebuild_tags.sh && chmod +x rebuild_tags.sh
+./rebuild_tags.sh
+```
+
+Watch the `import/` folder for new cards (in a second terminal, from `small_front/`):
+
+```bash
+python import_watcher.py
+```
+
+See [Setup Guide — Local development](docs/setup-guide.md#local-development-without-docker) for more detail.
+
+## Development (Docker)
+
+If you use Docker Compose for the stack, rebuild the frontend after code changes:
 
 ```bash
 docker compose build frontend && docker compose up -d frontend
 ```
 
-### View Logs
+View logs:
 
 ```bash
 docker compose logs -f frontend
+docker compose logs -f importer
+```
+
+## Importing cards
+
+Drop character card files into the `import/` folder at the repo root. The **importer** service scans every 60 seconds (configurable via `IMPORT_SCAN_INTERVAL` in `.env`).
+
+| Accepted | Notes |
+|----------|-------|
+| `.png` | Tavern/SillyTavern cards with embedded `chara` or `ccv3` data |
+| `.json` | Character definition JSON |
+
+Imported cards are added to the **Generic** source. After processing, files move to `import/processed/` (or `import/failed/` with an error log on failure).
+
+```bash
+cp my-character.png import/
+docker compose logs -f importer   # watch import progress
 ```
 
 ## API Usage
@@ -314,6 +374,7 @@ char-archive-small_frontend/
 ├── README.md                      # This file
 ├── setup.sh                       # One-shot setup (Linux / macOS)
 ├── setup.ps1                      # One-shot setup (Windows)
+├── import/                        # Drop PNG/JSON cards here (watched by importer)
 ├── .env.example                   # Docker Compose env template
 ├── .gitignore
 ├── docker-compose.yml             # Stack: postgres, pgadmin, frontend
@@ -334,7 +395,8 @@ char-archive-small_frontend/
     ├── requirements.txt           # Python dependencies
     ├── rebuild_tag_index.py       # Rebuild tag search index in PostgreSQL
     ├── rebuild_tags.example.sh    # Example wrapper; copy to rebuild_tags.sh
-    ├── runme.sh                   # Local dev launcher
+    ├── runme.sh                   # Local dev launcher (Linux / macOS)
+    ├── runme.ps1                  # Local dev launcher (Windows)
     ├── sql/
     │   └── tag_index.sql          # Tag index DDL
     └── templates/

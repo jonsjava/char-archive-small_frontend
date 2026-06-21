@@ -20,6 +20,10 @@ db_data/
 *.dump
 archive/
 
+# Dropped card imports (keep folder, ignore contents)
+import/*
+!import/.gitkeep
+
 # Docker local overrides
 docker-compose.override.yml
 

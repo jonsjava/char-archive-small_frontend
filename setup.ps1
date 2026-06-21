@@ -147,7 +147,7 @@ function Show-Success {
 
 # --- main ---
 Test-Docker
-New-Item -ItemType Directory -Force -Path "db_data/postgres", "db_data/pgadmin" | Out-Null
+New-Item -ItemType Directory -Force -Path "db_data/postgres", "db_data/pgadmin", "import/processed", "import/failed" | Out-Null
 
 if (-not $TorrentDir) {
     $detected = Find-TorrentDir

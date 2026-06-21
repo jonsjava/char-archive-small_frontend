@@ -18,47 +18,12 @@ x-frontend-env: &frontend-env
   IMAGE_SUBDIR: ${IMAGE_SUBDIR:-hashed-data}
   ENABLE_BROWSE_ALL: ${ENABLE_BROWSE_ALL:-false}
 
+x-importer-env: &importer-env
+  <<: *frontend-env
+  IMPORT_DIR: /import
+  IMPORT_SCAN_INTERVAL: ${IMPORT_SCAN_INTERVAL:-60}
+
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: char_archive_db
-    restart: unless-stopped
-    environment:
-      <<: *postgres-env
-    volumes:
-      - ./db_data/postgres:/var/lib/postgresql/data
-    ports:
-      - target: 5432
-        published: ${POSTGRES_PORT:-5432}
-        host_ip: ${BIND_HOST:-0.0.0.0}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-char_archive} -d ${POSTGRES_DB:-char_archive}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - char_archive_network
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: char_archive_pgadmin
-    restart: unless-stopped
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@chararchive.dev}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
-      PGADMIN_CONFIG_SERVER_MODE: "True"
-    volumes:
-      - ./db_data/pgadmin:/var/lib/pgadmin
-    ports:
-      - target: 80
-        published: ${PGADMIN_PORT:-5050}
-        host_ip: ${BIND_HOST:-0.0.0.0}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - char_archive_network
-
   frontend:
     build:
       context: ./small_front
@@ -73,15 +38,27 @@ services:
       - target: 5000
         published: ${FRONTEND_PORT:-8080}
         host_ip: ${BIND_HOST:-0.0.0.0}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/stats')\""]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+    networks:
+      - char_archive_network
+
+  importer:
+    build:
+      context: ./small_front
+      dockerfile: Dockerfile
+    container_name: char_archive_importer
+    restart: unless-stopped
+    command: ["python", "import_watcher.py"]
+    environment:
+      <<: *importer-env
+    volumes:
+      - ${ARCHIVE_HOST_PATH:-./archive}:/archive
+      - ./import:/import
     networks:
       - char_archive_network
 

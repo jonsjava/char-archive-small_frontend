@@ -2,6 +2,8 @@
 
 This guide covers installing the Character Archive search frontend using the official torrent layout and Docker Compose.
 
+> **Not for production.** This project is intended for personal, local use only. It is not hardened for public deployment — no authentication, no rate limiting, no security audit. Run it on your own machine behind your own firewall; do not expose it to the internet as a public service.
+
 ## What you need
 
 | Requirement | Notes |
@@ -111,10 +113,22 @@ docker compose up -d
 | Frontend | http://localhost:8080 | `FRONTEND_PORT` |
 | pgAdmin | http://localhost:5050 | `PGADMIN_PORT` |
 | PostgreSQL | localhost:5432 | `POSTGRES_PORT` |
+| Importer | *(background)* | scans `import/` every 60s |
 
 pgAdmin login: `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` from `.env`.
 
 To connect pgAdmin to Postgres: host `postgres`, port `5432`, database `char_archive`, user `char_archive`.
+
+## Adding your own cards
+
+Copy PNG or JSON character cards into the `import/` folder at the repo root:
+
+```bash
+cp ~/Downloads/new-character.png import/
+docker compose logs -f importer
+```
+
+The importer runs as a Docker service, checks for new files every `IMPORT_SCAN_INTERVAL` seconds (default 60), and adds them to the **Generic** source. Processed files move to `import/processed/`; failures go to `import/failed/` with a `.error.txt` explanation.
 
 ## Common commands
 
@@ -122,6 +136,7 @@ To connect pgAdmin to Postgres: host `postgres`, port `5432`, database `char_arc
 docker compose ps
 docker compose logs -f postgres    # watch DB import
 docker compose logs -f frontend
+docker compose logs -f importer
 docker compose down
 docker compose up -d
 ```
@@ -170,7 +185,91 @@ Wait until `docker compose ps` shows postgres as `healthy`.
 
 ## Local development (without Docker)
 
-See [README.md](../README.md#development). Use `small_front/.env` with `ARCHIVE_PATH` pointing at `<torrent-dir>/archive` and sharded layout settings.
+Use this if you prefer running Python and PostgreSQL directly on your host instead of Docker.
+
+### Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| Python 3.11+ | [python.org](https://www.python.org/downloads/) — on Windows, check "Add to PATH" during install |
+| PostgreSQL 16 | [postgresql.org](https://www.postgresql.org/download/) |
+| Torrent data | `database.dump` and extracted `archive/hashed-data/` |
+
+### 1. Create the database
+
+**Linux / macOS:**
+
+```bash
+createuser char_archive -P
+createdb char_archive -O char_archive
+pg_restore -U char_archive -d char_archive /path/to/character-archive-final-torrent/database.dump
+```
+
+**Windows (PowerShell):** open a terminal where `psql` and `pg_restore` are on PATH (PostgreSQL install directory `bin` folder), then run the same commands. Alternatively, create the user and database in pgAdmin, then restore `database.dump` via pgAdmin's restore dialog.
+
+### 2. Configure `small_front/.env`
+
+```bash
+cd small_front
+cp .env.example .env
+```
+
+Set at minimum:
+
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=char_archive
+DB_USER=char_archive
+DB_PASSWORD=your_password
+ARCHIVE_PATH=/full/path/to/character-archive-final-torrent/archive
+IMAGE_LAYOUT=sharded
+IMAGE_SUBDIR=hashed-data
+PORT=5000
+```
+
+Windows example:
+
+```env
+ARCHIVE_PATH=C:\Downloads\character-archive-final-torrent\archive
+VENV_PATH=C:\Users\you\venv
+```
+
+### 3. Run the frontend
+
+**Linux / macOS:**
+
+```bash
+cd small_front
+./runme.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+cd small_front
+.\runme.ps1
+```
+
+Open **http://localhost:5000**. The launcher scripts create a virtualenv on first run and install `requirements.txt` automatically.
+
+### 4. Tag index and imports
+
+After restoring `database.dump`, rebuild the tag index once:
+
+```bash
+cd small_front
+cp rebuild_tags.example.sh rebuild_tags.sh && chmod +x rebuild_tags.sh
+./rebuild_tags.sh
+```
+
+To import new cards without Docker, run the watcher in a separate terminal (from `small_front/` with `.env` configured):
+
+```bash
+python import_watcher.py
+```
+
+Drop PNG or JSON files into the repo's `import/` folder. Set `IMPORT_DIR=../import` in `small_front/.env` (default in `.env.example`).
 
 ## Related docs
 
