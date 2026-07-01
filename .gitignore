@@ -7,6 +7,7 @@ small_front/.env
 
 # Local dev scripts (copy from *.example.sh)
 small_front/rebuild_tags.sh
+database.dump
 
 # Python
 __pycache__/

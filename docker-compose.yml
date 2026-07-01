@@ -4,7 +4,7 @@
 
 x-postgres-env: &postgres-env
   POSTGRES_USER: ${POSTGRES_USER:-char_archive}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
   POSTGRES_DB: ${POSTGRES_DB:-char_archive}
 
 x-frontend-env: &frontend-env
@@ -12,7 +12,7 @@ x-frontend-env: &frontend-env
   DB_PORT: "5432"
   DB_NAME: ${POSTGRES_DB:-char_archive}
   DB_USER: ${POSTGRES_USER:-char_archive}
-  DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
   ARCHIVE_PATH: /archive
   IMAGE_LAYOUT: ${IMAGE_LAYOUT:-sharded}
   IMAGE_SUBDIR: ${IMAGE_SUBDIR:-hashed-data}
@@ -24,6 +24,46 @@ x-importer-env: &importer-env
   IMPORT_SCAN_INTERVAL: ${IMPORT_SCAN_INTERVAL:-60}
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: char_archive_db
+    restart: unless-stopped
+    environment:
+      <<: *postgres-env
+    volumes:
+      - ./db_data/postgres:/var/lib/postgresql/data
+    ports:
+      - target: 5432
+        published: ${POSTGRES_PORT:-5432}
+        host_ip: ${BIND_HOST:-0.0.0.0}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-char_archive} -d ${POSTGRES_DB:-char_archive}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - char_archive_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: char_archive_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@chararchive.dev}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-changeme}
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+    volumes:
+      - ./db_data/pgadmin:/var/lib/pgadmin
+    ports:
+      - target: 80
+        published: ${PGADMIN_PORT:-5050}
+        host_ip: ${BIND_HOST:-0.0.0.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - char_archive_network
+
   frontend:
     build:
       context: ./small_front
@@ -38,6 +78,9 @@ services:
       - target: 5000
         published: ${FRONTEND_PORT:-8080}
         host_ip: ${BIND_HOST:-0.0.0.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/stats')\""]
       interval: 30s
@@ -59,6 +102,9 @@ services:
     volumes:
       - ${ARCHIVE_HOST_PATH:-./archive}:/archive
       - ./import:/import
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - char_archive_network
 

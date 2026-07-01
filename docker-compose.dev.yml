@@ -1,0 +1,15 @@
+# Live-reload dev overlay — UI and Python changes apply without rebuilding the image.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+#   Windows: .\compose.ps1 -Dev up -d
+#
+# Merge with docker-compose.override.yml as usual (torrent archive paths from setup.ps1).
+
+services:
+  frontend:
+    volumes:
+      - ./small_front:/app
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--reload", "app:app"]
+  importer:
+    volumes:
+      - ./small_front:/app

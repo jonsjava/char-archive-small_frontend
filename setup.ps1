@@ -2,13 +2,15 @@
 #
 # Usage:
 #   .\setup.ps1
+#   .\setup.ps1 -Debug
 #   .\setup.ps1 -TorrentDir "C:\Downloads\character-archive-final-torrent"
 #   .\setup.ps1 -TorrentDir "C:\Downloads\torrent" -NoWait -SkipTags
 
 param(
     [string]$TorrentDir = "",
     [switch]$NoWait,
-    [switch]$SkipTags
+    [switch]$SkipTags,
+    [switch]$Debug
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,14 +18,35 @@ Set-Location $PSScriptRoot
 
 function Write-Info($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Err($msg) { Write-Host "Error: $msg" -ForegroundColor Red; exit 1 }
+function Write-DebugLog($msg) {
+    if ($Debug) { Write-Host "[debug] $msg" -ForegroundColor DarkGray }
+}
+
+function Test-PathStatus([string]$Path, [string]$Type = "Any") {
+    if (-not $Path) { return "empty" }
+    if ($Type -eq "Leaf") {
+        if (Test-Path -LiteralPath $Path -PathType Leaf) { return "found (file)" }
+    } elseif ($Type -eq "Container") {
+        if (Test-Path -LiteralPath $Path -PathType Container) { return "found (directory)" }
+    } else {
+        if (Test-Path -LiteralPath $Path -PathType Leaf) { return "found (file)" }
+        if (Test-Path -LiteralPath $Path -PathType Container) { return "found (directory)" }
+    }
+    return "missing"
+}
 
 function Test-Docker {
+    Write-DebugLog "Test-Docker: checking docker info"
     try {
         docker info | Out-Null
+        Write-DebugLog "Test-Docker: docker info OK"
     } catch {
         Write-Err "Docker is not running. Start Docker Desktop and try again."
     }
+    Write-DebugLog "Test-Docker: checking docker compose version"
     try {
+        $composeVersion = docker compose version 2>&1
+        Write-DebugLog "Test-Docker: $composeVersion"
         docker compose version | Out-Null
     } catch {
         Write-Err "docker compose (v2) is required."
@@ -31,17 +54,28 @@ function Test-Docker {
 }
 
 function Resolve-AbsPath([string]$Path) {
-    return (Resolve-Path -LiteralPath $Path).Path
+    $resolved = (Resolve-Path -LiteralPath $Path).Path
+    Write-DebugLog "Resolve-AbsPath: '$Path' -> '$resolved'"
+    return $resolved
 }
 
 function Test-TorrentDir([string]$Root) {
+    Write-DebugLog "Test-TorrentDir: validating '$Root'"
+    $dirStatus = Test-PathStatus $Root "Container"
+    Write-DebugLog "  directory -> $dirStatus"
     if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
         Write-Err "Torrent directory not found: $Root"
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $Root "database.dump") -PathType Leaf)) {
+    $dumpPath = Join-Path $Root "database.dump"
+    $dumpStatus = Test-PathStatus $dumpPath "Leaf"
+    Write-DebugLog "  $dumpPath -> $dumpStatus"
+    if (-not (Test-Path -LiteralPath $dumpPath -PathType Leaf)) {
         Write-Err "Missing $Root\database.dump (should be at torrent root)."
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $Root "archive\hashed-data") -PathType Container)) {
+    $hashedPath = Join-Path $Root "archive\hashed-data"
+    $hashedStatus = Test-PathStatus $hashedPath "Container"
+    Write-DebugLog "  $hashedPath -> $hashedStatus"
+    if (-not (Test-Path -LiteralPath $hashedPath -PathType Container)) {
         Write-Err "Missing $Root\archive\hashed-data — extract archive.7z.* first."
     }
 }
@@ -53,11 +87,21 @@ function Find-TorrentDir {
         (Join-Path $env:USERPROFILE "Downloads\character-archive-final-torrent"),
         (Join-Path $env:USERPROFILE "Downloads\char-achrive-final\character-archive-final-torrent")
     )
+    Write-DebugLog "Find-TorrentDir: scanning $($candidates.Count) locations"
     foreach ($c in $candidates) {
+        $dumpPath = Join-Path $c "database.dump"
+        $hashedPath = Join-Path $c "archive\hashed-data"
+        $dumpStatus = Test-PathStatus $dumpPath "Leaf"
+        $hashedStatus = Test-PathStatus $hashedPath "Container"
+        Write-DebugLog "  $c"
+        Write-DebugLog "    database.dump -> $dumpStatus"
+        Write-DebugLog "    archive\hashed-data -> $hashedStatus"
         if ((Test-Path (Join-Path $c "database.dump")) -and (Test-Path (Join-Path $c "archive\hashed-data"))) {
+            Write-DebugLog "Find-TorrentDir: matched '$c'"
             return $c
         }
     }
+    Write-DebugLog "Find-TorrentDir: no match"
     return $null
 }
 
@@ -68,6 +112,9 @@ function New-RandomPassword {
 }
 
 function Write-EnvFile([string]$Root, [string]$ArchivePath, [string]$DumpPath) {
+    Write-DebugLog "Write-EnvFile: TORRENT_DIR=$Root"
+    Write-DebugLog "Write-EnvFile: ARCHIVE_HOST_PATH=$ArchivePath"
+    Write-DebugLog "Write-EnvFile: DATABASE_DUMP_PATH=$DumpPath"
     $pgPass = New-RandomPassword
     $pgAdminPass = New-RandomPassword
     if (Test-Path ".env") {
@@ -75,6 +122,7 @@ function Write-EnvFile([string]$Root, [string]$ArchivePath, [string]$DumpPath) {
         $existing = Get-Content ".env" -Raw
         if ($existing -match '(?m)^POSTGRES_PASSWORD=(.+)$') { $pgPass = $Matches[1].Trim() }
         if ($existing -match '(?m)^PGADMIN_DEFAULT_PASSWORD=(.+)$') { $pgAdminPass = $Matches[1].Trim() }
+        Write-DebugLog "Write-EnvFile: reusing existing passwords from .env"
     }
     $lines = Get-Content ".env.example"
     $out = foreach ($line in $lines) {
@@ -86,12 +134,15 @@ function Write-EnvFile([string]$Root, [string]$ArchivePath, [string]$DumpPath) {
         else { $line }
     }
     $out | Set-Content -Encoding utf8 ".env"
+    Write-DebugLog "Write-EnvFile: wrote .env ($($out.Count) lines)"
 }
 
 function Write-OverrideFile([string]$ArchivePath, [string]$DumpPath) {
     # Docker Compose on Windows expects forward slashes in bind-mount paths.
     $ArchivePath = $ArchivePath -replace '\\', '/'
     $DumpPath = $DumpPath -replace '\\', '/'
+    Write-DebugLog "Write-OverrideFile: archive mount=$ArchivePath"
+    Write-DebugLog "Write-OverrideFile: dump mount=$DumpPath"
     $yaml = @"
 # Auto-generated by setup.ps1 — do not commit.
 services:
@@ -104,6 +155,11 @@ services:
       - ./init-db.sh:/docker-entrypoint-initdb.d/zz-init-db.sh:ro
 "@
     $yaml | Set-Content -Encoding utf8 "docker-compose.override.yml"
+    Write-DebugLog "Write-OverrideFile: wrote docker-compose.override.yml"
+    if ($Debug) {
+        Write-DebugLog "docker-compose.override.yml contents:"
+        Get-Content "docker-compose.override.yml" | ForEach-Object { Write-DebugLog "  $_" }
+    }
 }
 
 function Wait-ForDatabase {
@@ -114,11 +170,14 @@ function Wait-ForDatabase {
             $tables = docker compose exec -T postgres psql -U char_archive -d char_archive -t -c `
                 "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>$null
             $tables = ($tables -replace '\s', '')
+            Write-DebugLog "Wait-ForDatabase: attempt $i/$maxAttempts, table count='$tables'"
             if ($tables -and $tables -ne "0") {
                 Write-Info "Database ready ($tables public tables)."
                 return
             }
-        } catch { }
+        } catch {
+            Write-DebugLog "Wait-ForDatabase: attempt $i failed: $($_.Exception.Message)"
+        }
         if ($i % 6 -eq 0) {
             Write-Host "  Still waiting... ($($i * 10)s) — tail logs: docker compose logs -f postgres"
         }
@@ -147,11 +206,19 @@ function Show-Success {
     Write-Host "  pgAdmin:   http://localhost:$pgPort"
     Write-Host ""
     Write-Host "Credentials are in .env (POSTGRES_PASSWORD, PGADMIN_DEFAULT_PASSWORD)."
+    Write-Host "If the UI looks outdated after a git pull, run: docker compose up -d --build frontend"
 }
 
 # --- main ---
+Write-DebugLog "setup.ps1 starting"
+Write-DebugLog "  PSScriptRoot: $PSScriptRoot"
+Write-DebugLog "  PWD:          $PWD"
+Write-DebugLog "  TorrentDir arg: $(if ($TorrentDir) { $TorrentDir } else { '(not set)' })"
+Write-DebugLog "  NoWait: $NoWait  SkipTags: $SkipTags"
+
 Test-Docker
 New-Item -ItemType Directory -Force -Path "db_data/postgres", "db_data/pgadmin", "import/processed", "import/failed" | Out-Null
+Write-DebugLog "Ensured data directories exist under $PWD"
 
 if (-not $TorrentDir) {
     $detected = Find-TorrentDir
@@ -159,8 +226,10 @@ if (-not $TorrentDir) {
         Write-Host "Detected torrent folder: $detected"
         $input = Read-Host "Torrent download directory [$detected]"
         $TorrentDir = if ($input) { $input } else { $detected }
+        Write-DebugLog "TorrentDir from prompt: '$TorrentDir' (detected was '$detected', input was '$input')"
     } else {
         $TorrentDir = Read-Host "Torrent download directory (required)"
+        Write-DebugLog "TorrentDir from prompt (no auto-detect): '$TorrentDir'"
     }
 }
 
@@ -180,7 +249,9 @@ Write-EnvFile $TorrentDir $ArchivePath $DumpPath
 Write-OverrideFile $ArchivePath $DumpPath
 
 Write-Info "Starting Docker Compose..."
+Write-DebugLog "Running: docker compose up -d --build"
 docker compose up -d --build
+Write-DebugLog "docker compose up exit code: $LASTEXITCODE"
 
 if ($NoWait) {
     Write-Host "Skipped wait (-NoWait). When import finishes, run:"
