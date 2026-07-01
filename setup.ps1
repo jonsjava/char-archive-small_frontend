@@ -166,28 +166,12 @@ function Write-OverrideFile([string]$ArchivePath, [string]$DumpPath) {
 }
 
 function Wait-ForDatabase {
-    Write-Info "Waiting for database import (this can take 30+ minutes on first run)..."
-    $maxAttempts = 360
-    for ($i = 1; $i -le $maxAttempts; $i++) {
-        try {
-            $tables = docker compose exec -T postgres psql -U char_archive -d char_archive -t -c `
-                "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>$null
-            $tables = ($tables -replace '\s', '')
-            Write-DebugLog "Wait-ForDatabase: attempt $i/$maxAttempts, table count='$tables'"
-            if ($tables -and $tables -ne "0") {
-                Write-Info "Database ready: $tables public tables."
-                return
-            }
-        } catch {
-            Write-DebugLog "Wait-ForDatabase: attempt $i failed: $($_.Exception.Message)"
-        }
-        if ($i % 6 -eq 0) {
-            $elapsedSec = $i * 10
-            Write-Host "  Still waiting... ${elapsedSec}s - tail logs: docker compose logs -f postgres"
-        }
-        Start-Sleep -Seconds 10
+    . "$PSScriptRoot\scripts\db_import_progress.ps1"
+    try {
+        Wait-ForDockerDbImport -DumpPath $script:DumpPathForImport
+    } catch {
+        Write-Err $_.Exception.Message
     }
-    Write-Err "Timed out waiting for database. Check: docker compose logs postgres"
 }
 
 function Invoke-TagRebuild {
@@ -244,6 +228,7 @@ Test-TorrentDir $TorrentDir
 
 $ArchivePath = Join-Path $TorrentDir "archive"
 $DumpPath = Join-Path $TorrentDir "database.dump"
+$script:DumpPathForImport = $DumpPath
 
 Write-Info "Torrent dir:  $TorrentDir"
 Write-Info "Archive:      $ArchivePath"

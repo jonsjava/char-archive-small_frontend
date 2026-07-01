@@ -260,10 +260,5 @@ if ($tableCount -and $tableCount -ne "0") {
 }
 
 Write-Host "Database is empty, restoring from dump (this may take 30+ minutes)..."
-Write-DebugLog "Running: pg_restore -h $($db.Host) -p $($db.Port) -U $($db.User) -d $($db.Name) -v $DumpPath"
-pg_restore -h $db.Host -p $db.Port -U $db.User -d $db.Name -v $DumpPath
-Write-DebugLog "pg_restore exit code: $LASTEXITCODE"
-if ($LASTEXITCODE -ne 0) {
-    Write-Warning "pg_restore exited with code $LASTEXITCODE (some warnings are normal for custom dumps)."
-}
-Write-Host "Database restore completed."
+. "$PSScriptRoot\scripts\db_import_progress.ps1"
+Invoke-LocalDbRestoreWithProgress -Db $db -DumpPath $DumpPath

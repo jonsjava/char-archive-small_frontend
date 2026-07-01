@@ -173,27 +173,9 @@ EOF
 }
 
 wait_for_db() {
-  local max_attempts=360 attempt=1 tables
-  info "Waiting for database import (this can take 30+ minutes on first run)..."
-  while [[ $attempt -le $max_attempts ]]; do
-    if docker compose ps postgres 2>/dev/null | grep -q unhealthy; then
-      sleep 10
-      attempt=$((attempt + 1))
-      continue
-    fi
-    tables="$(docker compose exec -T postgres psql -U char_archive -d char_archive -t -c \
-      "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null | tr -d ' \n' || true)"
-    if [[ -n "$tables" && "$tables" != "0" ]]; then
-      info "Database ready ($tables public tables)."
-      return 0
-    fi
-    if (( attempt % 6 == 0 )); then
-      echo "  Still waiting... (${attempt}0s) — tail logs: docker compose logs -f postgres"
-    fi
-    sleep 10
-    attempt=$((attempt + 1))
-  done
-  die "Timed out waiting for database. Check: docker compose logs postgres"
+  # shellcheck source=scripts/db_import_progress.sh
+  source "$(dirname "$0")/scripts/db_import_progress.sh"
+  wait_for_docker_db_import "$DUMP_PATH"
 }
 
 rebuild_tags() {
