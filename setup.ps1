@@ -106,9 +106,11 @@ function Find-TorrentDir {
 }
 
 function New-RandomPassword {
-    $bytes = New-Object byte[] 16
+    # 24 bytes -> ~32 base64 chars; stripping [+/=] can shorten, so keep a safe margin.
+    $bytes = New-Object byte[] 24
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-    return [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','').Replace('/','').Substring(0, 20)
+    $token = [Convert]::ToBase64String($bytes) -replace '[+/=]', ''
+    return $token.Substring(0, 20)
 }
 
 function Write-EnvFile([string]$Root, [string]$ArchivePath, [string]$DumpPath) {
